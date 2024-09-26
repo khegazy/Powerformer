@@ -49,6 +49,9 @@ if __name__ == '__main__':
     parser.add_argument('--decomposition', type=int, default=0, help='decomposition; True 1 False 0')
     parser.add_argument('--kernel_size', type=int, default=25, help='decomposition-kernel')
     parser.add_argument('--individual', type=int, default=0, help='individual head; True 1 False 0')
+    parser.add_argument('--attn_decay_type', type=str, default=None)
+    parser.add_argument('--train_attn_decay', default=False, action='store_true')
+    parser.add_argument('--attn_decay_scale', type=float, default=4.0)
 
     # Formers 
     parser.add_argument('--embed_type', type=int, default=0, help='0: default 1: value embedding + temporal embedding + positional embedding 2: value embedding + temporal embedding 3: value embedding + positional embedding 4: value embedding')
@@ -114,10 +117,15 @@ if __name__ == '__main__':
 
     Exp = Exp_Main
 
+    attn_decay_tag = str(args.attn_decay_type)
+    if args.train_attn_decay:
+        attn_decay_tag += "_train"
+    else:
+        attn_decay_tag += f"_{args.attn_decay_scale}"
     if args.is_training:
         for ii in range(args.itr):
             # setting record of experiments
-            setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_dt{}_{}_{}'.format(
+            setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_dt{}_at{}_{}_{}'.format(
                 args.model_id,
                 args.model,
                 args.data,
@@ -133,6 +141,7 @@ if __name__ == '__main__':
                 args.factor,
                 args.embed,
                 args.distil,
+                attn_decay_tag,
                 args.des,ii)
 
             exp = Exp(args)  # set experiments
@@ -149,7 +158,7 @@ if __name__ == '__main__':
             torch.cuda.empty_cache()
     else:
         ii = 0
-        setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_dt{}_{}_{}'.format(args.model_id,
+        setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_dt{}_at{}_{}_{}'.format(args.model_id,
                                                                                                     args.model,
                                                                                                     args.data,
                                                                                                     args.features,
@@ -164,6 +173,7 @@ if __name__ == '__main__':
                                                                                                     args.factor,
                                                                                                     args.embed,
                                                                                                     args.distil,
+                                                                                                    attn_decay_tag,
                                                                                                     args.des, ii)
 
         exp = Exp(args)  # set experiments

@@ -20,7 +20,7 @@ class PatchTST_backbone(nn.Module):
                  padding_var:Optional[int]=None, attn_mask:Optional[Tensor]=None, res_attention:bool=True, pre_norm:bool=False, store_attn:bool=False,
                  pe:str='zeros', learn_pe:bool=True, fc_dropout:float=0., head_dropout = 0, padding_patch = None,
                  pretrain_head:bool=False, head_type = 'flatten', individual = False, revin = True, affine = True, subtract_last = False,
-                 verbose:bool=False, **kwargs):
+                 verbose:bool=False, attn_decay_type=None, train_attn_decay=True, attn_decay_scale=0.25, **kwargs):
         
         super().__init__()
         
@@ -42,7 +42,9 @@ class PatchTST_backbone(nn.Module):
                                 n_layers=n_layers, d_model=d_model, n_heads=n_heads, d_k=d_k, d_v=d_v, d_ff=d_ff,
                                 attn_dropout=attn_dropout, dropout=dropout, act=act, key_padding_mask=key_padding_mask, padding_var=padding_var,
                                 attn_mask=attn_mask, res_attention=res_attention, pre_norm=pre_norm, store_attn=store_attn,
-                                pe=pe, learn_pe=learn_pe, verbose=verbose, **kwargs)
+                                pe=pe, learn_pe=learn_pe, verbose=verbose,
+                                attn_decay_type=attn_decay_type, train_attn_decay=train_attn_decay, attn_decay_scale=attn_decay_scale,
+                                **kwargs)
 
         # Head
         self.head_nf = d_model * patch_num
@@ -130,7 +132,8 @@ class TSTiEncoder(nn.Module):  #i means channel-independent
                  n_layers=3, d_model=128, n_heads=16, d_k=None, d_v=None,
                  d_ff=256, norm='BatchNorm', attn_dropout=0., dropout=0., act="gelu", store_attn=False,
                  key_padding_mask='auto', padding_var=None, attn_mask=None, res_attention=True, pre_norm=False,
-                 pe='zeros', learn_pe=True, verbose=False, **kwargs):
+                 pe='zeros', learn_pe=True, verbose=False,
+                 attn_decay_type=None, train_attn_decay=True, attn_decay_scale=0.25, **kwargs):
         
         
         super().__init__()
@@ -151,7 +154,8 @@ class TSTiEncoder(nn.Module):  #i means channel-independent
 
         # Encoder
         self.encoder = TSTEncoder(q_len, d_model, n_heads, d_k=d_k, d_v=d_v, d_ff=d_ff, norm=norm, attn_dropout=attn_dropout, dropout=dropout,
-                                   pre_norm=pre_norm, activation=act, res_attention=res_attention, n_layers=n_layers, store_attn=store_attn)
+                                   pre_norm=pre_norm, activation=act, res_attention=res_attention, n_layers=n_layers, store_attn=store_attn,
+                                   attn_decay_type=attn_decay_type, train_attn_decay=train_attn_decay, attn_decay_scale=attn_decay_scale)
 
         
     def forward(self, x) -> Tensor:                                              # x: [bs x nvars x patch_len x patch_num]
@@ -177,13 +181,15 @@ class TSTiEncoder(nn.Module):  #i means channel-independent
 class TSTEncoder(nn.Module):
     def __init__(self, q_len, d_model, n_heads, d_k=None, d_v=None, d_ff=None, 
                         norm='BatchNorm', attn_dropout=0., dropout=0., activation='gelu',
-                        res_attention=False, n_layers=1, pre_norm=False, store_attn=False):
+                        res_attention=False, n_layers=1, pre_norm=False, store_attn=False,
+                        attn_decay_type=None, train_attn_decay=True, attn_decay_scale=0.25):
         super().__init__()
 
         self.layers = nn.ModuleList([TSTEncoderLayer(q_len, d_model, n_heads=n_heads, d_k=d_k, d_v=d_v, d_ff=d_ff, norm=norm,
                                                       attn_dropout=attn_dropout, dropout=dropout,
                                                       activation=activation, res_attention=res_attention,
-                                                      pre_norm=pre_norm, store_attn=store_attn) for i in range(n_layers)])
+                                                      pre_norm=pre_norm, store_attn=store_attn,
+                                                      attn_decay_type=attn_decay_type, train_attn_decay=train_attn_decay, attn_decay_scale=attn_decay_scale) for i in range(n_layers)])
         self.res_attention = res_attention
 
     def forward(self, src:Tensor, key_padding_mask:Optional[Tensor]=None, attn_mask:Optional[Tensor]=None):
@@ -200,7 +206,8 @@ class TSTEncoder(nn.Module):
 
 class TSTEncoderLayer(nn.Module):
     def __init__(self, q_len, d_model, n_heads, d_k=None, d_v=None, d_ff=256, store_attn=False,
-                 norm='BatchNorm', attn_dropout=0, dropout=0., bias=True, activation="gelu", res_attention=False, pre_norm=False):
+                 norm='BatchNorm', attn_dropout=0, dropout=0., bias=True, activation="gelu", res_attention=False, pre_norm=False,
+                 attn_decay_type=None, train_attn_decay=True, attn_decay_scale=0.25):
         super().__init__()
         assert not d_model%n_heads, f"d_model ({d_model}) must be divisible by n_heads ({n_heads})"
         d_k = d_model // n_heads if d_k is None else d_k
@@ -208,7 +215,8 @@ class TSTEncoderLayer(nn.Module):
 
         # Multi-Head attention
         self.res_attention = res_attention
-        self.self_attn = _MultiheadAttention(d_model, n_heads, d_k, d_v, attn_dropout=attn_dropout, proj_dropout=dropout, res_attention=res_attention)
+        self.self_attn = _MultiheadAttention(d_model, n_heads, d_k, d_v, attn_dropout=attn_dropout, proj_dropout=dropout, res_attention=res_attention,
+            attn_decay_type=attn_decay_type, train_attn_decay=train_attn_decay, attn_decay_scale=attn_decay_scale)
 
         # Add & Norm
         self.dropout_attn = nn.Dropout(dropout)
@@ -270,7 +278,8 @@ class TSTEncoderLayer(nn.Module):
 
 
 class _MultiheadAttention(nn.Module):
-    def __init__(self, d_model, n_heads, d_k=None, d_v=None, res_attention=False, attn_dropout=0., proj_dropout=0., qkv_bias=True, lsa=False):
+    def __init__(self, d_model, n_heads, d_k=None, d_v=None, res_attention=False, attn_dropout=0., proj_dropout=0., qkv_bias=True, lsa=False,
+                attn_decay_type=None, train_attn_decay=True, attn_decay_scale=0.25):
         """Multi Head Attention Layer
         Input shape:
             Q:       [batch_size (bs) x max_q_len x d_model]
@@ -289,7 +298,8 @@ class _MultiheadAttention(nn.Module):
 
         # Scaled Dot-Product Attention (multiple heads)
         self.res_attention = res_attention
-        self.sdp_attn = _ScaledDotProductAttention(d_model, n_heads, attn_dropout=attn_dropout, res_attention=self.res_attention, lsa=lsa)
+        self.sdp_attn = _ScaledDotProductAttention(d_model, n_heads, attn_dropout=attn_dropout, res_attention=self.res_attention, lsa=lsa,
+                attn_decay_type=attn_decay_type, train_attn_decay=train_attn_decay, attn_decay_scale=attn_decay_scale)
 
         # Poject output
         self.to_out = nn.Sequential(nn.Linear(n_heads * d_v, d_model), nn.Dropout(proj_dropout))
@@ -327,13 +337,66 @@ class _ScaledDotProductAttention(nn.Module):
     (Realformer: Transformer likes residual attention by He et al, 2020) and locality self sttention (Vision Transformer for Small-Size Datasets
     by Lee et al, 2021)"""
 
-    def __init__(self, d_model, n_heads, attn_dropout=0., res_attention=False, lsa=False):
+    def __init__(self, d_model, n_heads, attn_dropout=0., res_attention=False, lsa=False, attn_decay_type=None, train_attn_decay=True, attn_decay_scale=0.25):
         super().__init__()
         self.attn_dropout = nn.Dropout(attn_dropout)
         self.res_attention = res_attention
         head_dim = d_model // n_heads
         self.scale = nn.Parameter(torch.tensor(head_dim ** -0.5), requires_grad=lsa)
         self.lsa = lsa
+
+        self.decay_attn = False
+        if attn_decay_type is not None:
+            self.decay_attn = True
+            self.attn_decay_scale = nn.Parameter(torch.tensor(attn_decay_scale), requires_grad=train_attn_decay)
+            
+            print("ATTENTION DECAY", attn_decay_type)
+            if attn_decay_type.lower() == 'zeta':
+                self.attn_decay = self._zeta_distribution
+            elif attn_decay_type.lower() == 'gauss':
+                self.attn_decay = self._gauss_attn_decay
+            elif attn_decay_type.lower() == 'tdist':
+                self.attn_decay = self._tdist_attn_decay
+            else:
+                raise ValueError(f"Cannot handle attention decay type {attn_decay_type}")
+        else:
+            self.attn_decay = self._no_attn_decay
+
+    def _no_attn_decay(self, r_len, c_len):
+        return 1
+
+    def _zeta_distribution(self, r_len, c_len):
+        if not self.decay_attn:
+            return 1
+
+        times = torch.arange(r_len).unsqueeze(1) - torch.arange(c_len).unsqueeze(0) + 1
+        times = times.to(self.attn_decay_scale.device).to(torch.float32)
+        return -1*torch.abs(times)**self.attn_decay_scale
+
+    def _gauss_attn_decay(self, r_len, c_len):
+        print("comparing adding vs multiplying attn") #DEBUG
+        if not self.decay_attn:
+            return 1
+
+        #print(self.attn_decay_scale)
+        times = torch.arange(r_len).unsqueeze(1) - torch.arange(c_len).unsqueeze(0)
+        times = times.to(self.attn_decay_scale.device).to(torch.float32)
+        out = torch.exp(-0.5*(times/self.attn_decay_scale)**2).unsqueeze(0).unsqueeze(0)
+        #print(times)
+        #print(times/self.attn_decay_scale)
+        #print(out)
+        return out
+
+    def _tdist_attn_decay(self, r_len, c_len):
+        print("comparing adding vs multiplying attn") #DEBUG
+        if not self.decay_attn:
+            return 1
+
+        times = torch.arange(r_len).unsqueeze(1) - torch.arange(c_len).unsqueeze(0)
+        times = times.to(self.attn_decay_scale.device)
+        times = times.unsqueeze(0).unsqueeze(0)
+        return (1 + times**2/self.attn_decay_scale)**(-0.5*(self.attn_decay_scale + 1))
+
 
     def forward(self, q:Tensor, k:Tensor, v:Tensor, prev:Optional[Tensor]=None, key_padding_mask:Optional[Tensor]=None, attn_mask:Optional[Tensor]=None):
         '''
@@ -351,7 +414,11 @@ class _ScaledDotProductAttention(nn.Module):
         '''
 
         # Scaled MatMul (q, k) - similarity scores for all pairs of positions in an input sequence
-        attn_scores = torch.matmul(q, k) * self.scale      # attn_scores : [bs x n_heads x max_q_len x q_len]
+        #attn_scores = torch.matmul(q, k) * self.scale  * self.attn_decay(q.shape[2], k.shape[-1])    # attn_scores : [bs x n_heads x max_q_len x q_len]
+        attn_scores = torch.matmul(q, k) * self.scale    # attn_scores : [bs x n_heads x max_q_len x q_len]
+        #print("ATTN B4", attn_scores[0,0])
+        #attn_scores = attn_scores * self.attn_decay(q.shape[2], k.shape[-1])    # attn_scores : [bs x n_heads x max_q_len x q_len]
+        #print("ATTN after", attn_scores[0,0])
 
         # Add pre-softmax attention scores from the previous layer (optional)
         if prev is not None: attn_scores = attn_scores + prev
@@ -363,15 +430,23 @@ class _ScaledDotProductAttention(nn.Module):
             else:
                 attn_scores += attn_mask
 
+        # Power law attention decay 
+        attn_decay = self.attn_decay(q.shape[2], k.shape[-1])
+        attn_scores = attn_scores + attn_decay
+
         # Key padding mask (optional)
         if key_padding_mask is not None:                              # mask with shape [bs x q_len] (only when max_w_len == q_len)
             attn_scores.masked_fill_(key_padding_mask.unsqueeze(1).unsqueeze(2), -np.inf)
 
         # normalize the attention weights
+        #print("SCORES", attn_scores[0,0])
         attn_weights = F.softmax(attn_scores, dim=-1)                 # attn_weights   : [bs x n_heads x max_q_len x q_len]
+        #attn_weights = attn_weights*self.attn_decay(q.shape[2], k.shape[-1])
+        #attn_weights = attn_weights/torch.sum(attn_weights, -1, keepdim=True)
         attn_weights = self.attn_dropout(attn_weights)
 
         # compute the new values given the attention weights
+        #print("WEIGHTS", attn_weights[0,0])
         output = torch.matmul(attn_weights, v)                        # output: [bs x n_heads x max_q_len x d_v]
 
         if self.res_attention: return output, attn_weights, attn_scores

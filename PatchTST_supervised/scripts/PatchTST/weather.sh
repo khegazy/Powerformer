@@ -1,3 +1,5 @@
+DECAY_SCALE=${1}
+
 if [ ! -d "./logs" ]; then
     mkdir ./logs
 fi
@@ -8,7 +10,7 @@ fi
 seq_len=336
 model_name=PatchTST
 
-root_path_name=./dataset/
+root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/weather/US_hourly_1.6K-stations/
 data_path_name=weather.csv
 model_id_name=weather
 data_name=custom
@@ -40,5 +42,8 @@ do
       --des 'Exp' \
       --train_epochs 100\
       --patience 20\
-      --itr 1 --batch_size 128 --learning_rate 0.0001 >logs/LongForecasting/$model_name'_'$model_id_name'_'$seq_len'_'$pred_len.log 
+      --itr 1 --batch_size 128 --learning_rate 0.0001 
+      #--attn_decay_type 'gauss' \
+      #--attn_decay_scale ${DECAY_SCALE} \
+      #>logs/LongForecasting/$model_name'_'$model_id_name'_'$seq_len'_'$pred_len.log 
 done
