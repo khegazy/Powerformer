@@ -20,11 +20,15 @@ class PatchTST_backbone(nn.Module):
                  d_ff:int=256, norm:str='BatchNorm', attn_dropout:float=0., dropout:float=0., act:str="gelu", key_padding_mask:bool='auto',
                  padding_var:Optional[int]=None, attn_mask:Optional[Tensor]=None, res_attention:bool=True, pre_norm:bool=False, store_attn:bool=False,
                  pe:str='zeros', learn_pe:bool=True, fc_dropout:float=0., head_dropout = 0, padding_patch = None,
-                 pretrain_head:bool=False, head_type = 'flatten', individual = False, revin = True, affine = True, subtract_last = False,
+                 pretrain_head:bool=False, head_type = 'flatten', individual = False, revin = True, affine = True, subtract_last = False, is_sequential=False,
                  verbose:bool=False, attn_decay_type=None, train_attn_decay=True, attn_decay_scale=0.25, record_scores=False, **kwargs):
         
         super().__init__()
         
+        self.is_sequential = is_sequential
+        if self.is_sequential:
+            target_window = 1
+
         # RevIn
         self.revin = revin
         if self.revin: self.revin_layer = RevIN(c_in, affine=affine, subtract_last=subtract_last)
@@ -387,8 +391,7 @@ class _ScaledDotProductAttention(nn.Module):
         times = times.to(self.attn_decay_scale.device).to(torch.float32)
         mask = torch.zeros_like(times)
         mask[torch.abs(times)>self.attn_decay_scale] = -1*torch.inf
-        return mask
-
+        return self._enforce_causality(mask, times)
 
     def _zeta_distribution(self, r_len, c_len):
         if not self.decay_attn:
@@ -396,7 +399,8 @@ class _ScaledDotProductAttention(nn.Module):
 
         times = torch.arange(r_len).unsqueeze(1) - torch.arange(c_len).unsqueeze(0)
         times = times.to(self.attn_decay_scale.device).to(torch.float32)
-        return -1*torch.abs(times)**self.attn_decay_scale
+        mask = -1*torch.abs(times)**self.attn_decay_scale
+        return self._enforce_causality(mask, times)
 
     def _gauss_attn_decay(self, r_len, c_len):
         print("comparing adding vs multiplying attn") #DEBUG
@@ -406,11 +410,11 @@ class _ScaledDotProductAttention(nn.Module):
         #print(self.attn_decay_scale)
         times = torch.arange(r_len).unsqueeze(1) - torch.arange(c_len).unsqueeze(0)
         times = times.to(self.attn_decay_scale.device).to(torch.float32)
-        out = torch.exp(-0.5*(times/self.attn_decay_scale)**2).unsqueeze(0).unsqueeze(0)
+        mask = torch.exp(-0.5*(times/self.attn_decay_scale)**2).unsqueeze(0).unsqueeze(0)
         #print(times)
         #print(times/self.attn_decay_scale)
         #print(out)
-        return out
+        return self._enforce_causality(mask, times)
 
     def _tdist_attn_decay(self, r_len, c_len):
         print("comparing adding vs multiplying attn") #DEBUG
@@ -420,7 +424,12 @@ class _ScaledDotProductAttention(nn.Module):
         times = torch.arange(r_len).unsqueeze(1) - torch.arange(c_len).unsqueeze(0)
         times = times.to(self.attn_decay_scale.device)
         times = times.unsqueeze(0).unsqueeze(0)
-        return (1 + times**2/self.attn_decay_scale)**(-0.5*(self.attn_decay_scale + 1))
+        mask = (1 + times**2/self.attn_decay_scale)**(-0.5*(self.attn_decay_scale + 1))
+        return self._enforce_causality(mask, times)
+    
+    def _enforce_causality(self, mask, times):
+        mask[times < -1e-10] = -1*torch.inf
+        return mask
 
 
     def forward(self, q:Tensor, k:Tensor, v:Tensor, prev:Optional[Tensor]=None, key_padding_mask:Optional[Tensor]=None, attn_mask:Optional[Tensor]=None):

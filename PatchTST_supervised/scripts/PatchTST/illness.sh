@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=4
+export CUDA_VISIBLE_DEVICES=7
 
 if [ ! -d "./logs" ]; then
     mkdir ./logs
@@ -10,8 +10,8 @@ fi
 seq_len=104
 model_name=PatchTST
 
-#root_path_name=/scratch/khegazy/datasets/influenza_infections/
-root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/health/influenza/
+#root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/health/influenza/
+root_path_name=/scratch/khegazy/datasets/influenza_infections/
 data_path_name=national_illness.csv
 model_id_name=Illness
 data_name=custom
@@ -22,6 +22,7 @@ do
     for decay_scale in 0.1 0.5 1 2 5 10
     do
         python3 -u run_longExp.py \
+        --is_sequential 0 \
         --random_seed $random_seed \
         --is_training 1 \
         --root_path $root_path_name \
