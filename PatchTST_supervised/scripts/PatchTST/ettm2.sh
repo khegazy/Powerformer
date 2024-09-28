@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=7
 
 if [ ! -d "./logs" ]; then
     mkdir ./logs
@@ -10,8 +10,8 @@ fi
 seq_len=336
 model_name=PatchTST
 
-#root_path_name=/scratch/khegazy/datasets/electric_transformer_temperature_small/
-root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/electricity/ETT-small/
+#root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/electricity/ETT-small/
+root_path_name=/scratch/khegazy/datasets/electric_transformer_temperature_small/
 data_path_name=ETTm2.csv
 model_id_name=ETTm2
 data_name=ETTm2
@@ -22,6 +22,7 @@ do
     for decay_scale in 0.1 0.5 1 2 5 10
     do
         python3 -u run_longExp.py \
+        --is_sequential 0 \
         --random_seed $random_seed \
         --is_training 1 \
         --root_path $root_path_name \

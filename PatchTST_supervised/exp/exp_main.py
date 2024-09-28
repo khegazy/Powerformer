@@ -259,7 +259,7 @@ class Exp_Main(Exp_Basic):
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
                         if 'Linear' in self.args.model or 'TST' in self.args.model:
-                            outputs = self.model(batch_x)
+                            outputs = self.model.evaluate(batch_x, self.args.pred_len)
                         else:
                             if self.args.output_attention:
                                 outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
@@ -267,7 +267,7 @@ class Exp_Main(Exp_Basic):
                                 outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
                 else:
                     if 'Linear' in self.args.model or 'TST' in self.args.model:
-                            outputs = self.model(batch_x)
+                            outputs = self.model.evaluate(batch_x, self.args.pred_len)
                     else:
                         if self.args.output_attention:
                             outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
@@ -326,6 +326,15 @@ class Exp_Main(Exp_Basic):
         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
         trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
         inputx = inputx.reshape(-1, inputx.shape[-2], inputx.shape[-1])
+
+        print(preds.shape, trues.shape)
+        for i in range(10):
+            idx = i*100
+            fig, ax = plt.subplots()
+            ax.plot(trues[idx,:,0], '-k')
+            ax.plot(preds[idx,:,0], '-b')
+            #print(preds[i,:,:])
+            fig.savefig(f"test_sequence{idx}.png")
 
         # result save
         folder_path = './results/' + setting + '/'

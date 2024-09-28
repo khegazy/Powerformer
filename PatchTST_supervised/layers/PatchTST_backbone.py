@@ -391,8 +391,7 @@ class _ScaledDotProductAttention(nn.Module):
         times = times.to(self.attn_decay_scale.device).to(torch.float32)
         mask = torch.zeros_like(times)
         mask[torch.abs(times)>self.attn_decay_scale] = -1*torch.inf
-        return mask
-
+        return self._enforce_causality(mask, times)
 
     def _zeta_distribution(self, r_len, c_len):
         if not self.decay_attn:
@@ -400,7 +399,8 @@ class _ScaledDotProductAttention(nn.Module):
 
         times = torch.arange(r_len).unsqueeze(1) - torch.arange(c_len).unsqueeze(0)
         times = times.to(self.attn_decay_scale.device).to(torch.float32)
-        return -1*torch.abs(times)**self.attn_decay_scale
+        mask = -1*torch.abs(times)**self.attn_decay_scale
+        return self._enforce_causality(mask, times)
 
     def _gauss_attn_decay(self, r_len, c_len):
         print("comparing adding vs multiplying attn") #DEBUG
@@ -410,11 +410,11 @@ class _ScaledDotProductAttention(nn.Module):
         #print(self.attn_decay_scale)
         times = torch.arange(r_len).unsqueeze(1) - torch.arange(c_len).unsqueeze(0)
         times = times.to(self.attn_decay_scale.device).to(torch.float32)
-        out = torch.exp(-0.5*(times/self.attn_decay_scale)**2).unsqueeze(0).unsqueeze(0)
+        mask = torch.exp(-0.5*(times/self.attn_decay_scale)**2).unsqueeze(0).unsqueeze(0)
         #print(times)
         #print(times/self.attn_decay_scale)
         #print(out)
-        return out
+        return self._enforce_causality(mask, times)
 
     def _tdist_attn_decay(self, r_len, c_len):
         print("comparing adding vs multiplying attn") #DEBUG
@@ -424,7 +424,12 @@ class _ScaledDotProductAttention(nn.Module):
         times = torch.arange(r_len).unsqueeze(1) - torch.arange(c_len).unsqueeze(0)
         times = times.to(self.attn_decay_scale.device)
         times = times.unsqueeze(0).unsqueeze(0)
-        return (1 + times**2/self.attn_decay_scale)**(-0.5*(self.attn_decay_scale + 1))
+        mask = (1 + times**2/self.attn_decay_scale)**(-0.5*(self.attn_decay_scale + 1))
+        return self._enforce_causality(mask, times)
+    
+    def _enforce_causality(self, mask, times):
+        mask[times < -1e-10] = -1*torch.inf
+        return mask
 
 
     def forward(self, q:Tensor, k:Tensor, v:Tensor, prev:Optional[Tensor]=None, key_padding_mask:Optional[Tensor]=None, attn_mask:Optional[Tensor]=None):

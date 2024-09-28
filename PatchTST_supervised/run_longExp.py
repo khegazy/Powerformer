@@ -113,6 +113,12 @@ if __name__ == '__main__':
         args.device_ids = [int(id_) for id_ in device_ids]
         args.gpu = args.device_ids[0]
 
+    # Sequential settings
+    if args.is_sequential:
+        input_pred_len = args.pred_len
+        args.pred_len = 1
+        args.label_len = 0
+
     print('Args in experiment:')
     print(args)
 
@@ -152,6 +158,8 @@ if __name__ == '__main__':
             exp.train(setting)
 
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+            if args.is_sequential:
+                exp.args.pred_len = input_pred_len
             exp.test(setting)
 
             if args.do_predict:
@@ -183,6 +191,8 @@ if __name__ == '__main__':
             setting = "Sequential_" + setting
         exp = Exp(args)  # set experiments
         print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-        exp.test(setting, test=1, save_attn=True)
+        if args.is_sequential:
+            exp.args.pred_len = input_pred_len
+        exp.test(setting, test=1, save_attn=False)
         torch.cuda.empty_cache()
         

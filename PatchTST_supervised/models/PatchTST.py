@@ -91,7 +91,8 @@ class Model(nn.Module):
         if self.is_sequential:
             series = x
             for t in range(target_window):
-                pred = self.forward(x[:,-self.context_window:])
+                #print(series[0,-self.context_window:,0])
+                pred = self.forward(series[:,-self.context_window:])
                 series = torch.concatenate([series, pred], dim=1)
             return series
         else:
