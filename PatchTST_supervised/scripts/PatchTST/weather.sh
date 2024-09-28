@@ -16,7 +16,7 @@ data_name=custom
 random_seed=2021
 for pred_len in 96 192 336 720
 do
-    python -u run_longExp.py \
+    python3 -u run_longExp.py \
       --random_seed $random_seed \
       --is_training 1 \
       --root_path $root_path_name \

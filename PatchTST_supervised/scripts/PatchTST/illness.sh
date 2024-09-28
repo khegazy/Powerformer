@@ -10,8 +10,8 @@ fi
 seq_len=104
 model_name=PatchTST
 
-#root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/health/influenza/
-root_path_name=/scratch/khegazy/datasets/influenza_infections/
+#root_path_name=/scratch/khegazy/datasets/influenza_infections/
+root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/health/influenza/
 data_path_name=national_illness.csv
 model_id_name=Illness
 data_name=custom

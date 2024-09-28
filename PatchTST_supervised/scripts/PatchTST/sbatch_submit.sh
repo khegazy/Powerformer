@@ -1,7 +1,16 @@
 #!/bin/bash
 SCRIPT_NAME=${1}
-SCALE=${2}
-JOBNAME=${SCRIPT_NAME}
+MASK_TYPE=${2}
+SCALE=${3}
+if [ -z "$3" ]
+  then
+    JOBNAME=${SCRIPT_NAME}"_"${MASK_TYPE}
+    ARGS="--attn_decay_type "${MASK_TYPE}
+else
+    JOBNAME=${SCRIPT_NAME}"_"${MASK_TYPE}"_"${SCALE}
+    ARGS="--attn_decay_type "${MASK_TYPE}" --attn_decay_scale "${SCALE} 
+fi
+
 
 sbatch <<EOT
 #!/bin/bash
@@ -23,5 +32,5 @@ sbatch <<EOT
 
 module load pytorch/2.0.1
 export SLURM_CPU_BIND="cores"
-srun sh scripts/PatchTST/${SCRIPT_NAME}.sh ${SCALE}
+srun sh scripts/PatchTST/${SCRIPT_NAME}.sh ${ARGS}
 EOT

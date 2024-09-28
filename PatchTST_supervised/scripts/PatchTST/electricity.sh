@@ -8,8 +8,8 @@ fi
 seq_len=336
 model_name=PatchTST
 
-#root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/electricity/consumer_load/
-root_path_name=/scratch/khegazy/datasets/electricity_consumer_load/
+#root_path_name=/scratch/khegazy/datasets/electricity_consumer_load/
+root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/electricity/consumer_load/
 data_path_name=electricity.csv
 model_id_name=Electricity
 data_name=custom

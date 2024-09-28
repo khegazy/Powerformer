@@ -10,8 +10,8 @@ fi
 seq_len=336
 model_name=PatchTST
 
-#root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/electricity/ETT-small/
-root_path_name=/scratch/khegazy/datasets/electric_transformer_temperature_small/
+#root_path_name=/scratch/khegazy/datasets/electric_transformer_temperature_small/
+root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/electricity/ETT-small/
 data_path_name=ETTm1.csv
 model_id_name=ETTm1
 data_name=ETTm1

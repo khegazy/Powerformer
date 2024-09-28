@@ -10,8 +10,8 @@ fi
 seq_len=336
 model_name=PatchTST
 
-#root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/electricity/ETT-small/
-root_path_name=/scratch/khegazy/datasets/electric_transformer_temperature_small/
+#root_path_name=/scratch/khegazy/datasets/electric_transformer_temperature_small/
+root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/electricity/ETT-small/
 data_path_name=ETTh2.csv
 model_id_name=ETTh2
 data_name=ETTh2
@@ -20,8 +20,7 @@ random_seed=2021
 #for pred_len in 96 192 336 720  336 start at 2
 for pred_len in 96 192 336 720
 do
-    #for decay_scale in 0.1 0.5 1 2 5 10
-    for decay_scale in None
+    for decay_scale in 0.1 0.5 1 2 5 10
     do
         python3 -u run_longExp.py \
         --random_seed $random_seed \

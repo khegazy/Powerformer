@@ -472,3 +472,5 @@ $RECYCLE.BIN/
 *.pdf
 *.txt
 *.png
+*.npy
+*.pth
