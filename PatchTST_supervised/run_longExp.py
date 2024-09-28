@@ -13,6 +13,7 @@ if __name__ == '__main__':
 
     # basic config
     parser.add_argument('--is_training', type=int, required=True, default=1, help='status')
+    parser.add_argument('--is_sequential', type=int, required=True, default=0, help='status')
     parser.add_argument('--model_id', type=str, required=True, default='test', help='model id')
     parser.add_argument('--model', type=str, required=True, default='Autoformer',
                         help='model name, options: [Autoformer, Informer, Transformer]')
@@ -143,6 +144,8 @@ if __name__ == '__main__':
                 args.distil,
                 attn_decay_tag,
                 args.des,ii)
+            if args.is_sequential:
+                setting = "Sequential_" + setting
 
             exp = Exp(args)  # set experiments
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
@@ -176,6 +179,8 @@ if __name__ == '__main__':
                                                                                                     attn_decay_tag,
                                                                                                     args.des, ii)
 
+        if args.is_sequential:
+            setting = "Sequential_" + setting
         exp = Exp(args)  # set experiments
         print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
         exp.test(setting, test=1, save_attn=True)
