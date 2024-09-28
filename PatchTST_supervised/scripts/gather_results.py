@@ -49,7 +49,7 @@ print(results.keys())
 
 for data in results.keys():
     print(data)
-    with open(f'table_{data}.tex', 'w') as output:
+    with open(f'table_total_{data}.tex', 'w') as output:
         for pl, pl_dict in sorted(results[data].items()):
             out_str = f"& {pl}"
             print(pl)
@@ -57,3 +57,22 @@ for data in results.keys():
                 print('\t',tm)
                 out_str += f" & {tm_list[0][1]:0.4} / {tm_list[1][1]:0.4}"
             output.write(out_str + "  \\\\ \n")
+    
+    with open(f'table_mse_{data}.tex', 'w') as output:
+        for pl, pl_dict in sorted(results[data].items()):
+            out_str = f"& {pl}"
+            print(pl)
+            for tm, tm_list in sorted(pl_dict.items()):
+                print('\t',tm)
+                out_str += f" & {tm_list[0][1]:0.4}"
+            output.write(out_str + "  \\\\ \n")
+
+    with open(f'table_mae_{data}.tex', 'w') as output:
+        for pl, pl_dict in sorted(results[data].items()):
+            out_str = f"& {pl}"
+            print(pl)
+            for tm, tm_list in sorted(pl_dict.items()):
+                print('\t',tm)
+                out_str += f" & {tm_list[1][1]:0.4}"
+            output.write(out_str + "  \\\\ \n")
+

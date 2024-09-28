@@ -1,5 +1,3 @@
-DECAY_SCALE=${1}
-
 if [ ! -d "./logs" ]; then
     mkdir ./logs
 fi
@@ -10,7 +8,8 @@ fi
 seq_len=336
 model_name=PatchTST
 
-root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/electricity/consumer_load/
+#root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/electricity/consumer_load/
+root_path_name=/scratch/khegazy/datasets/electricity_consumer_load/
 data_path_name=electricity.csv
 model_id_name=Electricity
 data_name=custom
@@ -18,12 +17,12 @@ data_name=custom
 random_seed=2021
 for pred_len in 96 192 336 720
 do
-    python -u run_longExp.py \
+    python3 -u run_longExp.py \
     --random_seed $random_seed \
     --is_training 1 \
     --root_path $root_path_name \
     --data_path $data_path_name \
-    --model_id $model_id_name_$seq_len'_'$pred_len \
+    --model_id $model_id_name \
     --model $model_name \
     --data $data_name \
     --features M \
@@ -40,12 +39,12 @@ do
     --patch_len 16\
     --stride 8\
     --des 'Exp' \
-    --attn_decay_type 'gauss' \
-    --attn_decay_scale ${DECAY_SCALE} \
     --train_epochs 100\
     --patience 10\
     --lradj 'TST'\
     --pct_start 0.2\
-    --itr 1 --batch_size 32 --learning_rate 0.0001 
-    #>logs/LongForecasting/$model_name'_'$model_id_name'_'$seq_len'_'$pred_len.log 
+    --itr 1 --batch_size 32 --learning_rate 0.0001 \
+    "$@"
+    #>logs/LongForecasting/$model_name'_'$model_id_name'_'$seq_len'_'$pred_len.log
+    #--attn_decay_scale ${DECAY_SCALE} \
 done

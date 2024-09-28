@@ -1,3 +1,5 @@
+export CUDA_VISIBLE_DEVICES=2
+
 if [ ! -d "./logs" ]; then
     mkdir ./logs
 fi
@@ -8,7 +10,8 @@ fi
 seq_len=336
 model_name=PatchTST
 
-root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/electricity/ETT-small/
+#root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/electricity/ETT-small/
+root_path_name=/scratch/khegazy/datasets/electric_transformer_temperature_small/
 data_path_name=ETTm2.csv
 model_id_name=ETTm2
 data_name=ETTm2
@@ -18,12 +21,12 @@ for pred_len in 96 192 336 720
 do
     for decay_scale in 0.1 0.5 1 2 5 10
     do
-        python -u run_longExp.py \
+        python3 -u run_longExp.py \
         --random_seed $random_seed \
         --is_training 1 \
         --root_path $root_path_name \
         --data_path $data_path_name \
-        --model_id $model_id_name_$seq_len'_'$pred_len \
+        --model_id $model_id_name \
         --model $model_name \
         --data $data_name \
         --features M \
@@ -42,11 +45,12 @@ do
         --des 'Exp' \
         --train_epochs 100\
         --patience 20\
-        --attn_decay_type 'zeta' \
-        --attn_decay_scale ${decay_scale} \
         --lradj 'TST'\
         --pct_start 0.4 \
-        --itr 1 --batch_size 128 --learning_rate 0.0001 
+        --itr 1 --batch_size 128 --learning_rate 0.0001 \
+        --attn_decay_scale ${decay_scale} \
+        "$@"
+        #--attn_decay_type 'zeta' \
         #>logs/LongForecasting/$model_name'_'$model_id_name'_'$seq_len'_'$pred_len.log 
     done
 done

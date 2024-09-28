@@ -1,3 +1,5 @@
+export CUDA_VISIBLE_DEVICES=4
+
 if [ ! -d "./logs" ]; then
     mkdir ./logs
 fi
@@ -8,9 +10,10 @@ fi
 seq_len=104
 model_name=PatchTST
 
-root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/health/influenza/
+#root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/health/influenza/
+root_path_name=/scratch/khegazy/datasets/influenza_infections/
 data_path_name=national_illness.csv
-model_id_name=national_illness
+model_id_name=Illness
 data_name=custom
 
 random_seed=2021
@@ -18,12 +21,12 @@ for pred_len in 24 36 48 60
 do
     for decay_scale in 0.1 0.5 1 2 5 10
     do
-        python -u run_longExp.py \
+        python3 -u run_longExp.py \
         --random_seed $random_seed \
         --is_training 1 \
         --root_path $root_path_name \
         --data_path $data_path_name \
-        --model_id $model_id_name_$seq_len'_'$pred_len \
+        --model_id $model_id_name \
         --model $model_name \
         --data $data_name \
         --features M \
@@ -43,8 +46,9 @@ do
         --train_epochs 100\
         --lradj 'constant'\
         --itr 1 --batch_size 16 --learning_rate 0.0025\
-        --attn_decay_type 'zeta' \
         --attn_decay_scale ${decay_scale} \
+        "$@"
+        #--attn_decay_type 'zeta' \
         #>logs/LongForecasting/$model_name'_'$model_id_name'_'$seq_len'_'$pred_len.log 
     done
 done

@@ -175,7 +175,8 @@ ipython_config.py
 .LSOverride
 
 # Icon must end with two \r
-Icon
+Icon
+
 
 # Thumbnails
 ._*
@@ -470,3 +471,4 @@ $RECYCLE.BIN/
 *logs*
 *.pdf
 *.txt
+*.png
