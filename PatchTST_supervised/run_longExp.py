@@ -1,4 +1,5 @@
 import argparse
+import sys
 import os
 import torch
 from exp.exp_main import Exp_Main
@@ -13,7 +14,7 @@ if __name__ == '__main__':
 
     # basic config
     parser.add_argument('--is_training', type=int, required=True, default=1, help='status')
-    parser.add_argument('--is_sequential', type=int, required=True, default=0, help='status')
+    parser.add_argument('--is_sequential', type=int, required=False, default=0, help='status')
     parser.add_argument('--model_id', type=str, required=True, default='test', help='model id')
     parser.add_argument('--model', type=str, required=True, default='Autoformer',
                         help='model name, options: [Autoformer, Informer, Transformer]')
@@ -52,7 +53,7 @@ if __name__ == '__main__':
     parser.add_argument('--individual', type=int, default=0, help='individual head; True 1 False 0')
     parser.add_argument('--attn_decay_type', type=str, default=None)
     parser.add_argument('--train_attn_decay', default=False, action='store_true')
-    parser.add_argument('--attn_decay_scale', type=float, default=4.0)
+    parser.add_argument('--attn_decay_scale', type=float, default=0.0)
 
     # Formers 
     parser.add_argument('--embed_type', type=int, default=0, help='0: default 1: value embedding + temporal embedding + positional embedding 2: value embedding + temporal embedding 3: value embedding + positional embedding 4: value embedding')
@@ -98,6 +99,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    if args.is_sequential:
+        raise NotImplementedError("uncomment model.evaluate in exp_main")
     # random seed
     fix_seed = args.random_seed
     random.seed(fix_seed)
@@ -114,8 +117,8 @@ if __name__ == '__main__':
         args.gpu = args.device_ids[0]
 
     # Sequential settings
+    input_pred_len = args.pred_len
     if args.is_sequential:
-        input_pred_len = args.pred_len
         args.pred_len = 1
         args.label_len = 0
 
@@ -130,7 +133,7 @@ if __name__ == '__main__':
     else:
         attn_decay_tag += f"_{args.attn_decay_scale}"
     if args.is_training:
-        for ii in range(args.itr):
+        for ii in range(args.itr, args.itr+1):
             # setting record of experiments
             setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_dt{}_at{}_{}_{}'.format(
                 args.model_id,
@@ -153,6 +156,15 @@ if __name__ == '__main__':
             if args.is_sequential:
                 setting = "Sequential_" + setting
 
+            if os.path.exists("./result.txt") and "ETTh1" not in setting:
+                for ln in open("./result.txt", "r"):
+                    if setting in ln:
+                        print(f"found result in result.txt: {setting}")
+                        sys.exit()
+            if args.attn_decay_type is not None and args.attn_decay_type.lower() == "zeta" and args.attn_decay_scale > 5.5:
+                sys.exit()
+
+
             exp = Exp(args)  # set experiments
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp.train(setting)
@@ -168,8 +180,7 @@ if __name__ == '__main__':
 
             torch.cuda.empty_cache()
     else:
-        ii = 0
-        setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_dt{}_at{}_{}_{}'.format(args.model_id,
+        chkpt_setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_dt{}_at{}_{}_{}'.format(args.model_id,
                                                                                                     args.model,
                                                                                                     args.data,
                                                                                                     args.features,
@@ -185,14 +196,34 @@ if __name__ == '__main__':
                                                                                                     args.embed,
                                                                                                     args.distil,
                                                                                                     attn_decay_tag,
-                                                                                                    args.des, ii)
+                                                                                                    args.des, args.itr)
+
+        save_setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_dt{}_at{}_{}_{}'.format(args.model_id,
+                                                                                                    args.model,
+                                                                                                    args.data,
+                                                                                                    args.features,
+                                                                                                    args.seq_len,
+                                                                                                    args.label_len,
+                                                                                                    input_pred_len,
+                                                                                                    args.d_model,
+                                                                                                    args.n_heads,
+                                                                                                    args.e_layers,
+                                                                                                    args.d_layers,
+                                                                                                    args.d_ff,
+                                                                                                    args.factor,
+                                                                                                    args.embed,
+                                                                                                    args.distil,
+                                                                                                    attn_decay_tag,
+                                                                                                    args.des, args.itr)
+
 
         if args.is_sequential:
-            setting = "Sequential_" + setting
+            save_setting = "Sequential_" + save_setting
+            chkpt_setting = "Sequential_" + chkpt_setting
         exp = Exp(args)  # set experiments
-        print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+        print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(save_setting))
         if args.is_sequential:
             exp.args.pred_len = input_pred_len
-        exp.test(setting, test=1, save_attn=False)
+        exp.test(chkpt_setting, test=1, save_attn=True, save_setting=save_setting)
         torch.cuda.empty_cache()
         

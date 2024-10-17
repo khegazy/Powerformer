@@ -69,7 +69,8 @@ class Exp_Main(Exp_Basic):
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
                         if 'Linear' in self.args.model or 'TST' in self.args.model:
-                            outputs = self.model.evaluate(batch_x, self.args.pred_len)
+                            outputs = self.model(batch_x)
+                            #outputs = self.model.evaluate(batch_x, self.args.pred_len)
                         else:
                             if self.args.output_attention:
                                 outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
@@ -77,7 +78,8 @@ class Exp_Main(Exp_Basic):
                                 outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
                 else:
                     if 'Linear' in self.args.model or 'TST' in self.args.model:
-                        outputs = self.model.evaluate(batch_x, self.args.pred_len)
+                        outputs = self.model(batch_x)
+                        #outputs = self.model.evaluate(batch_x, self.args.pred_len)
                     else:
                         if self.args.output_attention:
                             outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
@@ -146,7 +148,8 @@ class Exp_Main(Exp_Basic):
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
                         if 'Linear' in self.args.model or 'TST' in self.args.model:
-                            outputs = self.model.evaluate(batch_x, self.args.pred_len)
+                            outputs = self.model(batch_x)
+                            #outputs = self.model.evaluate(batch_x, self.args.pred_len)
                         else:
                             if self.args.output_attention:
                                 outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
@@ -160,14 +163,14 @@ class Exp_Main(Exp_Basic):
                         train_loss.append(loss.item())
                 else:
                     if 'Linear' in self.args.model or 'TST' in self.args.model:
-                            outputs = self.model.evaluate(batch_x, self.args.pred_len)
+                            outputs = self.model(batch_x)
+                            #outputs = self.model.evaluate(batch_x, self.args.pred_len)
                     else:
                         if self.args.output_attention:
                             outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
                             
                         else:
                             outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, batch_y)
-                    # print(outputs.shape,batch_y.shape)
                     f_dim = -1 if self.args.features == 'MS' else 0
                     outputs = outputs[:, -self.args.pred_len:, f_dim:]
                     batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
@@ -216,8 +219,10 @@ class Exp_Main(Exp_Basic):
 
         return self.model
 
-    def test(self, setting, test=0, save_attn=False):
+    def test(self, setting, test=0, save_attn=False, output_dir="./", save_setting=None):
         test_data, test_loader = self._get_data(flag='test')
+        if save_setting == None:
+            save_setting = setting
         
         if test:
             print('loading model')
@@ -230,7 +235,7 @@ class Exp_Main(Exp_Basic):
         attn_powerlaw_scores = []
         attn_raw_weights = []
         attn_powerlaw_weights = []
-        folder_path = './test_results/' + setting + '/'
+        folder_path = output_dir + 'test_results/' + save_setting + '/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
@@ -259,7 +264,8 @@ class Exp_Main(Exp_Basic):
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
                         if 'Linear' in self.args.model or 'TST' in self.args.model:
-                            outputs = self.model.evaluate(batch_x, self.args.pred_len)
+                            outputs = self.model(batch_x)
+                            #outputs = self.model.evaluate(batch_x, self.args.pred_len)
                         else:
                             if self.args.output_attention:
                                 outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
@@ -267,7 +273,8 @@ class Exp_Main(Exp_Basic):
                                 outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
                 else:
                     if 'Linear' in self.args.model or 'TST' in self.args.model:
-                            outputs = self.model.evaluate(batch_x, self.args.pred_len)
+                            outputs = self.model(batch_x)
+                            #outputs = self.model.evaluate(batch_x, self.args.pred_len)
                     else:
                         if self.args.output_attention:
                             outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
@@ -276,7 +283,6 @@ class Exp_Main(Exp_Basic):
                             outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
 
                 f_dim = -1 if self.args.features == 'MS' else 0
-                # print(outputs.shape,batch_y.shape)
                 outputs = outputs[:, -self.args.pred_len:, f_dim:]
                 batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
                 outputs = outputs.detach().cpu().numpy()
@@ -327,33 +333,34 @@ class Exp_Main(Exp_Basic):
         trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
         inputx = inputx.reshape(-1, inputx.shape[-2], inputx.shape[-1])
 
-        print(preds.shape, trues.shape)
-        for i in range(10):
-            idx = i*100
-            fig, ax = plt.subplots()
-            ax.plot(trues[idx,:,0], '-k')
-            ax.plot(preds[idx,:,0], '-b')
-            #print(preds[i,:,:])
-            fig.savefig(f"test_sequence{idx}.png")
-
         # result save
-        folder_path = './results/' + setting + '/'
+        folder_path = os.path.join(output_dir, 'results', save_setting)
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
         mae, mse, rmse, mape, mspe, rse, corr = metric(preds, trues)
         print('mse:{}, mae:{}, rse:{}'.format(mse, mae, rse))
         f = open("result.txt", 'a')
-        f.write(setting + "  \n")
+        f.write(save_setting + "  \n")
         f.write('mse:{}, mae:{}, rse:{}'.format(mse, mae, rse))
         f.write('\n')
         f.write('\n')
         f.close()
 
-        # np.save(folder_path + 'metrics.npy', np.array([mae, mse, rmse, mape, mspe,rse, corr]))
-        np.save(folder_path + 'pred.npy', preds)
-        # np.save(folder_path + 'true.npy', trues)
-        # np.save(folder_path + 'x.npy', inputx)
+        pred_mse = (np.sum(preds - trues, axis=1))**2
+        pred_mae = np.abs(np.sum(preds - trues, axis=1))
+        #np.save(folder_path + 'metrics.npy', np.array([mae, mse, rmse, mape, mspe,rse, corr]))
+        np.save(os.path.join(folder_path, 'pred.npy'), preds)
+        np.save(os.path.join(folder_path, 'mse.npy'), pred_mse)
+        np.save(os.path.join(folder_path, 'mae.npy'), pred_mae)
+        idx0 = setting.find("_")
+        idx1 = setting.find("_pl")
+        idx2 = setting.find("_", idx1+2)
+        data_filename = os.path.join(
+            output_dir, "results",
+            f"data_{setting[:idx0]}{setting[idx1:idx2]}.npy"
+        )
+        np.save(data_filename, trues)
         if save_attn:
             score_bins = np.linspace(-500, 500, 2001)
             attn_raw_scores = np.array(attn_raw_scores).swapaxes(0,1)
@@ -361,13 +368,11 @@ class Exp_Main(Exp_Basic):
                 np.histogram(attn_raw_scores[i].flatten(), score_bins)[0]\
                 for i in range(len(attn_raw_scores))
             ])
-            #attn_raw_scores = np.reshape(attn_raw_scores, (-1, *attn_raw_scores.shape[2:]))
             attn_powerlaw_scores = np.array(attn_powerlaw_scores).swapaxes(0,1)
             hist_attn_powerlaw_scores = np.array([
                 np.histogram(attn_powerlaw_scores[i].flatten(), score_bins)[0]\
                 for i in range(len(attn_powerlaw_scores))
             ])
-            #attn_powerlaw_scores = np.reshape(attn_powerlaw_scores, (-1, *attn_powerlaw_scores.shape[2:]))
             weight_bins = np.linspace(0, 1, 101)
             attn_raw_weights = np.array(attn_raw_weights).swapaxes(0,1)
             hist_attn_raw_weights = np.array([
@@ -379,15 +384,13 @@ class Exp_Main(Exp_Basic):
                 np.histogram(attn_powerlaw_weights[i].flatten(), weight_bins)[0]\
                 for i in range(len(attn_powerlaw_weights))
             ])
-            #attn_weights = np.reshape(attn_weights, (-1, *attn_weights.shape[2:]))
-            #print(hist_attn_raw_scores.shape, hist_attn_powerlaw_scores.shape, hist_attn_weights.shape)
-            np.save(folder_path + 'attn_raw_scores.npy', hist_attn_raw_scores)
-            np.save(folder_path + 'attn_powerlaw_scores.npy', hist_attn_powerlaw_scores)
-            np.save(folder_path + 'attn_raw_weights.npy', hist_attn_raw_weights)
-            np.save(folder_path + 'attn_powerlaw_weights.npy', hist_attn_powerlaw_weights)
-            np.save(folder_path + 'score_bins.npy', score_bins)
-            np.save(folder_path + 'weight_bins.npy', weight_bins)
-            np.save(folder_path + 'powerlaw_mask.npy',
+            np.save(os.path.join(folder_path, 'attn_raw_scores.npy'), hist_attn_raw_scores)
+            np.save(os.path.join(folder_path, 'attn_powerlaw_scores.npy'), hist_attn_powerlaw_scores)
+            np.save(os.path.join(folder_path, 'attn_raw_weights.npy'), hist_attn_raw_weights)
+            np.save(os.path.join(folder_path, 'attn_powerlaw_weights.npy'), hist_attn_powerlaw_weights)
+            np.save(os.path.join(folder_path, 'score_bins.npy'), score_bins)
+            np.save(os.path.join(folder_path, 'weight_bins.npy'), weight_bins)
+            np.save(os.path.join(folder_path, 'powerlaw_mask.npy'),
                 self.model.model.backbone.encoder.layers[0].self_attn.sdp_attn.powerlaw_mask.detach().cpu().numpy())
             
             if self.model.decomposition:
