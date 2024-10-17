@@ -467,10 +467,11 @@ $RECYCLE.BIN/
 
 */checkpoints/*
 */results/*
+*plot*
+*Plot*
 *.tex
 *logs*
 *.pdf
 *.txt
-*.png
 *.npy
 *.pth
