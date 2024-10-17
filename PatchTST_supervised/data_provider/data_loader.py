@@ -58,6 +58,7 @@ class Dataset_ETT_hour(Dataset):
 
         if self.scale:
             train_data = df_data[border1s[0]:border2s[0]]
+            print("SCALING", train_data.values.shape)
             self.scaler.fit(train_data.values)
             data = self.scaler.transform(df_data.values)
         else:
@@ -96,6 +97,7 @@ class Dataset_ETT_hour(Dataset):
         return len(self.data_x) - self.seq_len - self.pred_len + 1
 
     def inverse_transform(self, data):
+        print("RUNNING INVERSE", data.shape)
         return self.scaler.inverse_transform(data)
 
 
@@ -290,6 +292,108 @@ class Dataset_Custom(Dataset):
         return self.scaler.inverse_transform(data)
     
 
+class Dataset_numpy(Dataset):
+    def __init__(self, root_path, flag='train', size=None,
+                 features='S', data_path='',
+                 target='OT', scale=True, timeenc=0, freq='h'):
+        # size [seq_len, label_len, pred_len]
+        # info
+        if size == None:
+            self.seq_len = 24 * 4 * 4
+            self.label_len = 24 * 4
+            self.pred_len = 24 * 4
+        else:
+            self.seq_len = size[0]
+            self.label_len = size[1]
+            self.pred_len = size[2]
+        # init
+        assert flag in ['train', 'test', 'val']
+        type_map = {'train': 0, 'val': 1, 'test': 2}
+        self.set_type = type_map[flag]
+
+        self.features = features
+        self.target = target
+        self.scale = scale
+        self.timeenc = timeenc
+        self.freq = freq
+
+        self.root_path = root_path
+        self.data_path = data_path
+        self.__read_data__()
+
+    def __read_data__(self):
+        #self.scaler = StandardScaler()
+        print("DATA FILE", os.path.join(self.root_path, self.data_path))
+        np_data = np.load(os.path.join(self.root_path, self.data_path))
+        #with open(os.path.join(self.root_path, self.data_path), "r") as file:
+        #    np_data = np.load(file).transpose()
+        self.N_samples, self.N_times, _ = np_data.shape
+        #np_data = np.transpose(np_data)
+        #df_raw = pd.DataFrame(np_data, columns=["OT"])
+        '''
+        df_raw.columns: ['date', ...(other features), target feature]
+        '''
+        #cols = list(df_raw.columns)
+        # print(cols)
+        num_train = int(self.N_samples * 0.7)
+        num_test = int(self.N_samples * 0.2)
+        num_vali = self.N_samples - num_train - num_test
+        border1s = [0, num_train, self.N_samples - num_test]
+        border2s = [num_train, num_train + num_vali, self.N_samples]
+        border1 = border1s[self.set_type]
+        border2 = border2s[self.set_type]
+
+        """
+        if self.features == 'M' or self.features == 'MS':
+            cols_data = df_raw.columns[1:]
+            df_data = df_raw[cols_data]
+        elif self.features == 'S':
+            df_data = df_raw[[self.target]]
+        """
+
+        self.scaler_mean = np.mean(np_data.flatten())
+        self.scaler_std = np.std(np_data.flatten())
+        data = (np_data - self.scaler_mean)/self.scaler_std
+        """
+        if self.scale:
+            train_data = df_data[border1s[0]:border2s[0]]
+            self.scaler.fit(train_data.values)
+            # print(self.scaler.mean_)
+            # exit()
+            data = self.scaler.transform(df_data.values)
+        else:
+            data = df_data.values
+        """
+
+        self.data_x = data[border1:border2]
+        self.data_y = data[border1:border2]
+        self.data_stamp = np.arange(self.N_times)
+        self.N_samples = len(self.data_x)
+        self.N_time_samples = self.N_times - self.seq_len - self.pred_len
+        print(self.N_samples, self.N_time_samples, self.N_samples*self.N_time_samples)
+        assert self.N_time_samples > 0
+
+    def __getitem__(self, index):
+        sample_idx = index//self.N_time_samples
+        s_begin = index % self.N_time_samples
+        s_end = s_begin + self.seq_len
+        r_begin = s_end - self.label_len
+        r_end = r_begin + self.label_len + self.pred_len
+
+        seq_x = self.data_x[sample_idx,s_begin:s_end]
+        seq_y = self.data_y[sample_idx,r_begin:r_end]
+        seq_x_mark = self.data_stamp[s_begin:s_end]
+        seq_y_mark = self.data_stamp[r_begin:r_end]
+
+        return seq_x, seq_y, seq_x_mark, seq_y_mark
+
+    def __len__(self):
+        return self.N_samples*self.N_time_samples
+
+    def inverse_transform(self, data):
+        raise NotImplementedError("CHECK THIS")
+        return self.scaler.inverse_transform(data)
+ 
 class Dataset_Pred(Dataset):
     def __init__(self, root_path, flag='pred', size=None,
                  features='S', data_path='ETTh1.csv',
