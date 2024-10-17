@@ -6,7 +6,7 @@ if [ ! -d "./logs/LongForecasting" ]; then
     mkdir ./logs/LongForecasting
 fi
 seq_len=336
-model_name=PatchTST
+model_name=Powerformer
 
 root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/traffic/SF_CDT/
 data_path_name=traffic.csv

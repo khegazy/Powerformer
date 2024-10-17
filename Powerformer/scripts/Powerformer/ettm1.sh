@@ -7,7 +7,7 @@ if [ ! -d "./logs/LongForecasting" ]; then
     mkdir ./logs/LongForecasting
 fi
 seq_len=336
-model_name=PatchTST
+model_name=Powerformer
 
 #root_path_name=/pscratch/sd/k/khegazy/datasets/time_series/electricity/ETT-small/
 root_path_name=/scratch/khegazy/datasets/electric_transformer_temperature_small/

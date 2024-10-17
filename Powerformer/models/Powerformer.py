@@ -8,7 +8,7 @@ from torch import Tensor
 import torch.nn.functional as F
 import numpy as np
 
-from layers.PatchTST_backbone import PatchTST_backbone
+from layers.Powerformer_backbone import Powerformer_backbone
 from layers.PatchTST_layers import series_decomp
 
 
@@ -57,7 +57,7 @@ class Model(nn.Module):
         self.decomposition = decomposition
         if self.decomposition:
             self.decomp_module = series_decomp(kernel_size)
-            self.model_trend = PatchTST_backbone(c_in=c_in, context_window = context_window, target_window=target_window, patch_len=patch_len, stride=stride, 
+            self.model_trend = Powerformer_backbone(c_in=c_in, context_window = context_window, target_window=target_window, patch_len=patch_len, stride=stride, 
                                   max_seq_len=max_seq_len, n_layers=n_layers, d_model=d_model,
                                   n_heads=n_heads, d_k=d_k, d_v=d_v, d_ff=d_ff, norm=norm, attn_dropout=attn_dropout,
                                   dropout=dropout, act=act, key_padding_mask=key_padding_mask, padding_var=padding_var, 
@@ -66,7 +66,7 @@ class Model(nn.Module):
                                   pretrain_head=pretrain_head, head_type=head_type, individual=individual, revin=revin, affine=affine,
                                   subtract_last=subtract_last, is_sequential=self.is_sequential, verbose=verbose,
                                   attn_decay_type=attn_decay_type, train_attn_decay=train_attn_decay, attn_decay_scale=attn_decay_scale, **kwargs)
-            self.model_res = PatchTST_backbone(c_in=c_in, context_window = context_window, target_window=target_window, patch_len=patch_len, stride=stride, 
+            self.model_res = Powerformer_backbone(c_in=c_in, context_window = context_window, target_window=target_window, patch_len=patch_len, stride=stride, 
                                   max_seq_len=max_seq_len, n_layers=n_layers, d_model=d_model,
                                   n_heads=n_heads, d_k=d_k, d_v=d_v, d_ff=d_ff, norm=norm, attn_dropout=attn_dropout,
                                   dropout=dropout, act=act, key_padding_mask=key_padding_mask, padding_var=padding_var, 
@@ -76,7 +76,7 @@ class Model(nn.Module):
                                   subtract_last=subtract_last, is_sequential=self.is_sequential, verbose=verbose,
                                   attn_decay_type=attn_decay_type, train_attn_decay=train_attn_decay, attn_decay_scale=attn_decay_scale, **kwargs)
         else:
-            self.model = PatchTST_backbone(c_in=c_in, context_window = context_window, target_window=target_window, patch_len=patch_len, stride=stride, 
+            self.model = Powerformer_backbone(c_in=c_in, context_window = context_window, target_window=target_window, patch_len=patch_len, stride=stride, 
                                   max_seq_len=max_seq_len, n_layers=n_layers, d_model=d_model,
                                   n_heads=n_heads, d_k=d_k, d_v=d_v, d_ff=d_ff, norm=norm, attn_dropout=attn_dropout,
                                   dropout=dropout, act=act, key_padding_mask=key_padding_mask, padding_var=padding_var, 
