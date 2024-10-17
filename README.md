@@ -23,7 +23,6 @@ Powerformer is built on top of [PatchTST](https://github.com/yuqinie98/PatchTST)
 
 Powerformer outperform other state-of-the-art Transformer-based models. Compared to previous models, Powerformer has 29 of the 40 MSE and MAE evaluations over 5 real-world datasets. This is almost twice as much as the second best model, which outperforms on 15 tasks.
 
-![alt text](https://github.com/khegazy/Powerformer/blob/main/pic/table1.png)
 
 ## Getting Started
 
