@@ -381,9 +381,9 @@ class _ScaledDotProductAttention(nn.Module):
             self.decay_mask = self._enforce_causality(
                 self._butterworth_filter(attn_decay_scale, order, times), times
             )
-        elif attn_decay_type.lower() == 'zeta':
+        elif attn_decay_type.lower() == 'simpowerlaw':
             self.decay_mask = self._enforce_causality(
-                self._zeta_distribution(attn_decay_scale, times), times
+                self._power_law(attn_decay_scale, times), times
             )
         elif attn_decay_type.lower() == 'gauss':
             self.decay_mask = self._enforce_causality(
@@ -408,7 +408,7 @@ class _ScaledDotProductAttention(nn.Module):
         mask[torch.abs(times)>scale] = -1*torch.inf
         return self._enforce_causality(mask, times)
 
-    def _zeta_distribution(self, scale, times):
+    def _power_law(self, scale, times):
         mask = -1*(torch.abs(times)**scale)
         return self._enforce_causality(mask, times)
 
