@@ -476,7 +476,10 @@ class _ScaledDotProductAttention(nn.Module):
         if self.record_scores:
             self.raw_weights = F.softmax(attn_scores, dim=-1)                 # attn_weights   : [bs x n_heads x max_q_len x q_len]
 
+        #np.save("raw_scores.npy", attn_scores.detach().cpu().numpy())
+        #np.save("mask.npy", self.decay_mask.detach().cpu().numpy())
         attn_scores = attn_scores + self.decay_mask
+        #np.save("scores.npy", attn_scores.detach().cpu().numpy())
         if self.record_scores:
             self.masked_scores = attn_scores
             self.powerlaw_mask = self.decay_mask
@@ -487,6 +490,7 @@ class _ScaledDotProductAttention(nn.Module):
 
         # normalize the attention weights
         attn_weights = F.softmax(attn_scores, dim=-1)                 # attn_weights   : [bs x n_heads x max_q_len x q_len]
+        #np.save("weights.npy", attn_weights.detach().cpu().numpy())
         if self.record_scores:
             self.attn_weights = attn_weights
         if self.do_dropout:
