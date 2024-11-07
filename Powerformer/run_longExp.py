@@ -1,8 +1,6 @@
 import argparse
 import sys
 import os
-import torch
-from exp.exp_main import Exp_Main
 import random
 import numpy as np
 
@@ -98,6 +96,13 @@ if __name__ == '__main__':
     parser.add_argument('--test_flop', action='store_true', default=False, help='See utils/tools for usage')
 
     args = parser.parse_args()
+    if args.use_gpu:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(
+            args.gpu) if not args.use_multi_gpu else args.devices
+    
+    # Torch must be imported after changing CUDA_VISIBLE_DEVICES for nn.DataParallel to work
+    import torch
+    from exp.exp_main import Exp_Main
 
     if args.is_sequential:
         raise NotImplementedError("uncomment model.evaluate in exp_main")
@@ -107,7 +112,7 @@ if __name__ == '__main__':
     torch.manual_seed(fix_seed)
     np.random.seed(fix_seed)
 
-
+    print("USE GPU", args.use_gpu, torch.cuda.is_available())
     args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
 
     if args.use_gpu and args.use_multi_gpu:
