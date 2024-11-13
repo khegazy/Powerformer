@@ -96,7 +96,7 @@ if __name__ == '__main__':
     parser.add_argument('--test_flop', action='store_true', default=False, help='See utils/tools for usage')
 
     args = parser.parse_args()
-    if args.use_gpu:
+    if args.use_gpu and args.use_multi_gpu:
         os.environ["CUDA_VISIBLE_DEVICES"] = str(
             args.gpu) if not args.use_multi_gpu else args.devices
     
