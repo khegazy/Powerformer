@@ -339,14 +339,147 @@ class _MultiheadAttention(nn.Module):
         else: return output, attn_weights
 
 
-class _ScaledDotProductAttention(nn.Module):
+class CausalLocalMasks(nn.Module):
+    def __init__(self, attn_decay_type, attn_decay_scale, patch_num, train_attn_decay=False, **kwargs) -> None:
+        super().__init__()
+        self.mask_type = attn_decay_type
+        self.mask_scale = attn_decay_scale
+        self.train_mask_scale = False
+
+        self.get_decay_mask = None
+        self.decay_mask = 0
+        self.times = nn.Parameter(
+            torch.arange(patch_num).unsqueeze(1) - torch.arange(patch_num).unsqueeze(0),
+            requires_grad=False
+        )
+
+        if self.mask_type is None:
+            self.decay_mask = 0
+        elif self.mask_type.lower() == 'causal':
+            self.decay_mask = torch.zeros((self.patch_num, self.patch_num))
+        elif self.mask_type.lower() == 'step':
+            self.mask_scale = int(self.mask_scale)
+            if self.mask_scale[0] < 1:
+                raise ValueError("Attention decay scale must be >= 1 for step distribution")
+            self.decay_mask = self._enforce_causality(self._step_distribution(self.times))
+        elif 'butter' in self.mask_type.lower():
+            order=int(self.mask_type[6:])
+            self.decay_mask = self._enforce_causality(
+                self._butterworth_filter(self.mask_scale, order, self.times)
+            )
+        elif self.mask_type.lower() == 'powerlaw':
+            self.train_mask_scale = train_attn_decay
+            self.mask_scale = -1*np.abs(self.mask_scale)
+            self.get_decay_mask = self._power_law_mask
+        elif self.mask_type.lower() == 'simpowerlaw':
+            self.train_mask_scale = train_attn_decay
+            self.get_decay_mask = self._sim_power_law_mask
+        elif self.mask_type.lower() == 'gauss':
+            self.decay_mask = self._enforce_causality(
+                self._gauss_attn_decay(self.mask_scale, self.times)
+            )
+        elif self.mask_type.lower() == 'tdist':
+            self.decay_mask = self._enforce_causality(
+                self._tdist_attn_decay(self.mask_scale, self.times)
+            )
+        else:
+            raise ValueError(f"Cannot handle attention decay type {self.mask_type}")
+            
+        #if self.mask_type is not None and not train_attn_decay:
+        
+        if self.get_decay_mask is None:
+            self.decay_mask = nn.Parameter(
+                self.decay_mask, requires_grad=train_attn_decay
+            )
+            if train_attn_decay:
+                self.train_mask_scale = False
+                self.get_decay_mask = self._train_decay_mask
+            else:
+                def return_decay_mask(times):
+                    return self.decay_mask
+                self.get_decay_mask = return_decay_mask
+        
+        if self.mask_type is not None:
+            self.mask_scale = nn.Parameter(
+                torch.tensor(self.mask_scale), requires_grad=self.train_mask_scale
+            )
+ 
+
+
+    def _no_attn_decay(self, r_len, c_len):
+        return 0
+
+    def _enforce_causality(self, mask, replacement=-1*torch.inf):
+        mask[self.times < -1e-10] = replacement
+        return mask
+
+    def _train_decay_mask(self):
+        return self._enforce_causality(self.decay_mask)
+    
+    def _step_distribution(self, times):
+        mask = torch.zeros_like(times)
+        mask[torch.abs(times)>self.mask_scale] = -1*torch.inf
+        return self._enforce_causality(mask, times)
+
+    def _power_law(self, times):
+        return torch.abs(times)**self.mask_scale
+    
+    def _sim_power_law_mask(self):
+        return self._enforce_causality(
+            -1*self._power_law(self.mask_scale, self.times)
+        )
+
+    def _power_law_mask(self):
+        local_mask = torch.log(
+            self._power_law(
+                self._enforce_causality((self.times+1), replacement=1)
+            )
+        )
+        return self._enforce_causality(local_mask)
+    
+    def _butterworth_filter(self, order, times):
+        times = times.detach().numpy().astype(int)
+        b, a = sp.signal.butter(order, 0.8, 'lowpass', analog=False)
+        t, decay = sp.signal.freqz(b, a)
+        t = self.mask_scale*t/2
+        dc = 5*np.log(np.abs(decay))
+        decay_interp = sp.interpolate.interp1d(t, dc)
+        mask = np.zeros(times.shape)
+        for i in range(int(t[-1])+1):
+            mask[times == i] = decay_interp(i)
+        mask[times > int(t[-1])] = -np.inf
+
+        return self._enforce_causality(torch.tensor(mask))
+
+    def _gauss_attn_decay(self):
+        print("comparing adding vs multiplying attn") #DEBUG
+
+        mask = 1 - torch.exp(-0.5*(self.times/self.mask_scale)**2)
+        mask = mask.unsqueeze(0).unsqueeze(0)
+        return self._enforce_causality(mask, self.times)
+
+    def _tdist_attn_decay(self):
+        print("comparing adding vs multiplying attn") #DEBUG
+        mask = 1 - (1 + self.times**2/self.mask_scale)**(-0.5*(self.mask_scale + 1))
+        return self._enforce_causality(mask, self.times)
+
+        self.alpha = -1*torch.tensor(np.abs(alpha))
+        self.scale_weight = nn.Parameter(torch.zeros(1))
+
+
+class _ScaledDotProductAttention(CausalLocalMasks):
     r"""Scaled Dot-Product Attention module (Attention is all you need by Vaswani et al., 2017) with optional residual attention from previous layer
     (Realformer: Transformer likes residual attention by He et al, 2020) and locality self sttention (Vision Transformer for Small-Size Datasets
     by Lee et al, 2021)"""
 
     def __init__(self, d_model, n_heads, attn_dropout=0., res_attention=False, lsa=False, patch_num=0,
                  attn_decay_type=None, train_attn_decay=True, attn_decay_scale=0.25, name="", record_scores=False):
-        super().__init__()
+        super().__init__(
+            attn_decay_type=attn_decay_type, 
+            attn_decay_scale=attn_decay_scale, 
+            patch_num=patch_num, 
+            train_attn_decay=train_attn_decay
+        )
         self.attn_dropout = nn.Dropout(attn_dropout)
         self.res_attention = res_attention
         head_dim = d_model // n_heads
@@ -360,92 +493,6 @@ class _ScaledDotProductAttention(nn.Module):
         self.attn_score_record = np.zeros(len(self.attn_score_bins)-1)
         self.attn_mask_score_record = np.zeros(len(self.attn_score_bins)-1)
         self.attn_score_dt = []
-
-        self.decay_mask = 0
-        times = torch.arange(patch_num).unsqueeze(1) - torch.arange(patch_num).unsqueeze(0)
-        if attn_decay_type is None:
-            self.decay_mask = 0
-        elif attn_decay_type.lower() == 'causal':
-            self.decay_mask = self._enforce_causality(
-                torch.zeros((patch_num, patch_num)), times
-            )
-        elif attn_decay_type.lower() == 'step':
-            attn_decay_scale = int(attn_decay_scale)
-            if attn_decay_scale < 1:
-                raise ValueError("Attention decay scale must be >= 1 for step distribution")
-            self.decay_mask = self._enforce_causality(
-                self._step_distribution(attn_decay_scale, times), times
-            )
-        elif 'butter' in attn_decay_type.lower():
-            order=int(attn_decay_type[6:])
-            self.decay_mask = self._enforce_causality(
-                self._butterworth_filter(attn_decay_scale, order, times), times
-            )
-        elif attn_decay_type.lower() == 'powerlaw':
-            scale = -1*np.abs(attn_decay_scale)
-            self.decay_mask = self._enforce_causality(
-                torch.log(self._power_law(scale, times+1)), times
-            )
-            print("DECAY MASK", self.decay_mask)
-        elif attn_decay_type.lower() == 'simpowerlaw':
-            self.decay_mask = self._enforce_causality(
-                -1*self._power_law(attn_decay_scale, times), times
-            )
-        elif attn_decay_type.lower() == 'gauss':
-            self.decay_mask = self._enforce_causality(
-                self._gauss_attn_decay(attn_decay_scale, times), times
-            )
-        elif attn_decay_type.lower() == 'tdist':
-            self.decay_mask = self._enforce_causality(
-                self._tdist_attn_decay(attn_decay_scale, times), times
-            )
-        else:
-            raise ValueError(f"Cannot handle attention decay type {attn_decay_type}")
-            
-        if attn_decay_type is not None:
-            self.decay_mask = nn.Parameter(self.decay_mask, requires_grad=train_attn_decay)
-            self.attn_decay_scale = nn.Parameter(torch.tensor(attn_decay_scale), requires_grad=train_attn_decay)
-
-    def _no_attn_decay(self, r_len, c_len):
-        return 0
-
-    def _step_distribution(self, scale, times):
-        mask = torch.zeros_like(times)
-        mask[torch.abs(times)>scale] = -1*torch.inf
-        return self._enforce_causality(mask, times)
-
-    def _power_law(self, scale, times):
-        mask = torch.abs(times)**scale
-        return self._enforce_causality(mask, times)
-
-    def _butterworth_filter(self, scale, order, times):
-        times = times.detach().numpy().astype(int)
-        b, a = sp.signal.butter(order, 0.8, 'lowpass', analog=False)
-        t, decay = sp.signal.freqz(b, a)
-        t = scale*t/2
-        dc = 5*np.log(np.abs(decay))
-        decay_interp = sp.interpolate.interp1d(t, dc)
-        mask = np.zeros(times.shape)
-        for i in range(int(t[-1])+1):
-            mask[times == i] = decay_interp(i)
-        mask[times > int(t[-1])] = -np.inf
-
-        return self._enforce_causality(torch.tensor(mask), times)
-
-    def _gauss_attn_decay(self, scale, times):
-        print("comparing adding vs multiplying attn") #DEBUG
-
-        mask = 1 - torch.exp(-0.5*(times/scale)**2).unsqueeze(0).unsqueeze(0)
-        return self._enforce_causality(mask, times)
-
-    def _tdist_attn_decay(self, scale, times):
-        print("comparing adding vs multiplying attn") #DEBUG
-        mask = 1 - (1 + times**2/scale)**(-0.5*(scale + 1))
-        return self._enforce_causality(mask, times)
-    
-    def _enforce_causality(self, mask, times):
-        mask[times < -1e-10] = -1*torch.inf
-        return mask
 
 
     def forward(self, q:Tensor, k:Tensor, v:Tensor, prev:Optional[Tensor]=None, key_padding_mask:Optional[Tensor]=None, attn_mask:Optional[Tensor]=None):
@@ -482,13 +529,14 @@ class _ScaledDotProductAttention(nn.Module):
         if self.record_scores:
             self.raw_weights = F.softmax(attn_scores, dim=-1)                 # attn_weights   : [bs x n_heads x max_q_len x q_len]
 
+        decay_mask = self.get_decay_mask()
         #np.save("raw_scores.npy", attn_scores.detach().cpu().numpy())
         #np.save("mask.npy", self.decay_mask.detach().cpu().numpy())
-        attn_scores = attn_scores + self.decay_mask
+        attn_scores = attn_scores + decay_mask
         #np.save("scores.npy", attn_scores.detach().cpu().numpy())
         if self.record_scores:
             self.masked_scores = attn_scores
-            self.powerlaw_mask = self.decay_mask
+            self.powerlaw_mask = decay_mask
         
         # Key padding mask (optional)
         if key_padding_mask is not None:                              # mask with shape [bs x q_len] (only when max_w_len == q_len)
