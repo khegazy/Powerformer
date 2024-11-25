@@ -37,7 +37,9 @@ class Exp_Main(Exp_Basic):
         model = model_dict[self.args.model].Model(self.args).float()
 
         if self.args.use_multi_gpu and self.args.use_gpu:
+            print("MULTIGPU", self.args.device_ids)
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
+            #model = nn.DataParallel(model)
         return model
 
     def _get_data(self, flag):
@@ -105,6 +107,7 @@ class Exp_Main(Exp_Basic):
         vali_data, vali_loader = self._get_data(flag='val')
         test_data, test_loader = self._get_data(flag='test')
 
+        print("GOT DATA")
         path = os.path.join(self.args.checkpoints, setting)
         if not os.path.exists(path):
             os.makedirs(path)

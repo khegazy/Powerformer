@@ -370,10 +370,16 @@ class CausalLocalMasks(nn.Module):
         elif self.mask_type.lower() == 'powerlaw':
             self.train_mask_scale = train_attn_decay
             self.mask_scale = -1*np.abs(self.mask_scale)
-            self.get_decay_mask = self._power_law_mask
+            if train_attn_decay:
+                self.get_decay_mask = self._power_law_mask
+            else:
+                self.decay_mask = self._power_law_mask()
         elif self.mask_type.lower() == 'simpowerlaw':
             self.train_mask_scale = train_attn_decay
-            self.get_decay_mask = self._sim_power_law_mask
+            if train_attn_decay:
+                self.get_decay_mask = self._sim_power_law_mask
+            else:
+                self.decay_mask = self._power_law_mask()
         elif self.mask_type.lower() == 'gauss':
             self.decay_mask = self._enforce_causality(
                 self._gauss_attn_decay(self.mask_scale, self.times)
@@ -389,23 +395,25 @@ class CausalLocalMasks(nn.Module):
         
         if self.get_decay_mask is None:
             self.decay_mask = nn.Parameter(
-                self.decay_mask, requires_grad=train_attn_decay
+                self.decay_mask, requires_grad=train_attn_decay and self.mask_type.lower() == "causal"
             )
             if train_attn_decay:
-                self.train_mask_scale = False
                 self.get_decay_mask = self._train_decay_mask
             else:
-                def return_decay_mask(times):
-                    return self.decay_mask
-                self.get_decay_mask = return_decay_mask
+                self.get_decay_mask = self._return_decay_mask
         
         if self.mask_type is not None:
             self.mask_scale = nn.Parameter(
-                torch.tensor(self.mask_scale), requires_grad=self.train_mask_scale
+                torch.tensor(self.mask_scale), requires_grad=train_attn_decay and not self.mask_type.lower() == "causal" 
             )
  
 
+    def _return_decay_mask(self):
+        return self.decay_mask
 
+    def _train_decay_mask(self):
+        return self._enforce_causality(self.decay_mask)
+    
     def _no_attn_decay(self, r_len, c_len):
         return 0
 
@@ -413,9 +421,6 @@ class CausalLocalMasks(nn.Module):
         mask[self.times < -1e-10] = replacement
         return mask
 
-    def _train_decay_mask(self):
-        return self._enforce_causality(self.decay_mask)
-    
     def _step_distribution(self, times):
         mask = torch.zeros_like(times)
         mask[torch.abs(times)>self.mask_scale] = -1*torch.inf
@@ -426,7 +431,7 @@ class CausalLocalMasks(nn.Module):
     
     def _sim_power_law_mask(self):
         return self._enforce_causality(
-            -1*self._power_law(self.mask_scale, self.times)
+            -1*self._power_law(self.times)
         )
 
     def _power_law_mask(self):
@@ -435,6 +440,7 @@ class CausalLocalMasks(nn.Module):
                 self._enforce_causality((self.times+1), replacement=1)
             )
         )
+        print("TIMES DEVICE", self.times.device, local_mask.device)
         return self._enforce_causality(local_mask)
     
     def _butterworth_filter(self, order, times):
@@ -529,7 +535,7 @@ class _ScaledDotProductAttention(CausalLocalMasks):
         if self.record_scores:
             self.raw_weights = F.softmax(attn_scores, dim=-1)                 # attn_weights   : [bs x n_heads x max_q_len x q_len]
 
-        decay_mask = self.get_decay_mask()
+        decay_mask = self.get_decay_mask().to(attn_scores.device)
         #np.save("raw_scores.npy", attn_scores.detach().cpu().numpy())
         #np.save("mask.npy", self.decay_mask.detach().cpu().numpy())
         attn_scores = attn_scores + decay_mask
