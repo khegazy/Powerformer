@@ -365,7 +365,7 @@ class CausalLocalMasks(nn.Module):
         elif 'butter' in self.mask_type.lower():
             order=int(self.mask_type[6:])
             self.decay_mask = self._enforce_causality(
-                self._butterworth_filter(self.mask_scale, order, self.times)
+                self._butterworth_filter(order, self.times)
             )
         elif self.mask_type.lower() == 'powerlaw':
             self.train_mask_scale = train_attn_decay
@@ -440,7 +440,7 @@ class CausalLocalMasks(nn.Module):
                 self._enforce_causality((self.times+1), replacement=1)
             )
         )
-        print("TIMES DEVICE", self.times.device, local_mask.device)
+        #print("TIMES DEVICE", self.times.device, local_mask.device)
         return self._enforce_causality(local_mask)
     
     def _butterworth_filter(self, order, times):
@@ -536,6 +536,7 @@ class _ScaledDotProductAttention(CausalLocalMasks):
             self.raw_weights = F.softmax(attn_scores, dim=-1)                 # attn_weights   : [bs x n_heads x max_q_len x q_len]
 
         decay_mask = self.get_decay_mask().to(attn_scores.device)
+        #print("MASK SCALE", self.mask_scale)
         #np.save("raw_scores.npy", attn_scores.detach().cpu().numpy())
         #np.save("mask.npy", self.decay_mask.detach().cpu().numpy())
         attn_scores = attn_scores + decay_mask

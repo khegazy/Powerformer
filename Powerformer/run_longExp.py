@@ -134,9 +134,8 @@ if __name__ == '__main__':
 
     attn_decay_tag = str(args.attn_decay_type)
     if args.train_attn_decay:
-        attn_decay_tag += "_train"
-    else:
-        attn_decay_tag += f"_{args.attn_decay_scale}"
+        attn_decay_tag += "-train"
+    attn_decay_tag += f"_{args.attn_decay_scale}"
     if args.is_training:
         for ii in range(args.itr, args.itr+1):
             # setting record of experiments
