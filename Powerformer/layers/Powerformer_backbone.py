@@ -349,7 +349,8 @@ class CausalLocalMasks(nn.Module):
         self.get_decay_mask = None
         self.decay_mask = 0
         self.times = nn.Parameter(
-            torch.arange(patch_num).unsqueeze(1) - torch.arange(patch_num).unsqueeze(0),
+            torch.arange(patch_num, dtype=torch.float32).unsqueeze(1)\
+                - torch.arange(patch_num, dtype=torch.float32).unsqueeze(0),
             requires_grad=False
         )
 
@@ -379,7 +380,7 @@ class CausalLocalMasks(nn.Module):
             if train_attn_decay:
                 self.get_decay_mask = self._sim_power_law_mask
             else:
-                self.decay_mask = self._power_law_mask()
+                self.decay_mask = self._sim_power_law_mask()
         elif self.mask_type.lower() == 'gauss':
             self.decay_mask = self._enforce_causality(
                 self._gauss_attn_decay(self.mask_scale, self.times)
