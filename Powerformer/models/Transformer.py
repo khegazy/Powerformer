@@ -43,13 +43,19 @@ class Model(nn.Module):
                                                     configs.dropout)
             self.dec_embedding = DataEmbedding_wo_pos_temp(configs.dec_in, configs.d_model, configs.embed, configs.freq,
                                                     configs.dropout)
+        
         # Encoder
         self.encoder = Encoder(
             [
                 EncoderLayer(
                     AttentionLayer(
                         FullAttention(False, configs.factor, attention_dropout=configs.dropout,
-                                      output_attention=configs.output_attention), configs.d_model, configs.n_heads),
+                                      output_attention=configs.output_attention,
+                                      attn_decay_type=configs.attn_decay_type, attn_decay_scale=configs.attn_decay_scale,
+                                      patch_num=configs.seq_len, train_attn_decay=False
+                        ),
+                        configs.d_model, configs.n_heads
+                    ),
                     configs.d_model,
                     configs.d_ff,
                     dropout=configs.dropout,
@@ -63,11 +69,18 @@ class Model(nn.Module):
             [
                 DecoderLayer(
                     AttentionLayer(
-                        FullAttention(True, configs.factor, attention_dropout=configs.dropout, output_attention=False),
-                        configs.d_model, configs.n_heads),
+                        FullAttention(True, configs.factor, attention_dropout=configs.dropout, output_attention=False,
+                            attn_decay_type=configs.attn_decay_type, attn_decay_scale=configs.attn_decay_scale,
+                            patch_num=configs.label_len + configs.pred_len, train_attn_decay=False
+                        ),
+                        configs.d_model, configs.n_heads
+                    ),
                     AttentionLayer(
-                        FullAttention(False, configs.factor, attention_dropout=configs.dropout, output_attention=False),
-                        configs.d_model, configs.n_heads),
+                        FullAttention(False, configs.factor, attention_dropout=configs.dropout, output_attention=False,
+                            attn_decay_type=None
+                        ),
+                        configs.d_model, configs.n_heads
+                    ),
                     configs.d_model,
                     configs.d_ff,
                     dropout=configs.dropout,
