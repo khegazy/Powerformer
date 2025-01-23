@@ -11,8 +11,7 @@ from math import sqrt
 import os
 
 from utils.masking import TriangularCausalMask, ProbMask
-from layers.Casaul_local_masks import CausalLocalMasks
-
+from layers.Causal_local_masks import CausalLocalMasks
 
 class FullAttention(CausalLocalMasks):
     def __init__(self, mask_flag=True, factor=5, scale=None, attention_dropout=0.1, output_attention=False,
