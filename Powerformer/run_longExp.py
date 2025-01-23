@@ -160,7 +160,7 @@ if __name__ == '__main__':
             if args.is_sequential:
                 setting = "Sequential_" + setting
 
-            if os.path.exists("./result.txt") and "ETTh1" not in setting:
+            if os.path.exists("./result.txt"):
                 for ln in open("./result.txt", "r"):
                     if setting in ln:
                         print(f"found result in result.txt: {setting}")
