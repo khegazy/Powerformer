@@ -235,25 +235,41 @@ class Exp_Main(Exp_Basic):
         preds = []
         trues = []
         inputx = []
-        attn_raw_scores = []
-        attn_powerlaw_scores = []
-        attn_raw_weights = []
-        attn_powerlaw_weights = []
+        attn_raw_scores = [[]]
+        attn_powerlaw_scores = [[]]
+        attn_raw_weights = [[]]
+        attn_powerlaw_weights = [[]]
+        if self.args.model.lower() == 'transformer':
+            for i in range(2):
+                attn_raw_scores.append([])
+                attn_powerlaw_scores.append([])
+                attn_raw_weights.append([])
+                attn_powerlaw_weights.append([])
         folder_path = output_dir + 'test_results/' + save_setting + '/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
         self.model.eval()
         if save_attn:
-            if self.model.decomposition:
-                for enc in self.model.model_trend.backbone.encoder.layers:
-                    enc.self_attn.sdp_attn.record_scores = True
-                for enc in self.model.model_res.backbone.encoder.layers:
-                    enc.self_attn.sdp_attn.record_scores = True
+            if self.args.model.lower() == 'transformer':
+                for enc in self.model.encoder.attn_layers:
+                    enc.attention.inner_attention.record_scores = True
+                for dec in self.model.decoder.layers:
+                    dec.self_attention.inner_attention.record_scores = True
+                for dec in self.model.decoder.layers:
+                    dec.cross_attention.inner_attention.record_scores = True
             else:
-                for enc in self.model.model.backbone.encoder.layers:
-                    enc.self_attn.sdp_attn.record_scores = True
+                if self.model.decomposition:
+                    for enc in self.model.model_trend.backbone.encoder.layers:
+                        enc.self_attn.sdp_attn.record_scores = True
+                    for enc in self.model.model_res.backbone.encoder.layers:
+                        enc.self_attn.sdp_attn.record_scores = True
+                else:
+                    for enc in self.model.model.backbone.encoder.layers:
+                        enc.self_attn.sdp_attn.record_scores = True
         with torch.no_grad():
+            score_bins = np.linspace(-500, 500, 2001)
+            weight_bins = np.linspace(0, 1, 101)
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(test_loader):
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
@@ -292,22 +308,74 @@ class Exp_Main(Exp_Basic):
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
                 if save_attn:
-                    raw_score = [
-                        enc.self_attn.sdp_attn.raw_scores.detach().cpu().numpy()\
-                        for enc in self.model.model.backbone.encoder.layers
-                    ]
-                    powerlaw_score = [
-                        enc.self_attn.sdp_attn.masked_scores.detach().cpu().numpy()\
-                        for enc in self.model.model.backbone.encoder.layers
-                    ]
-                    raw_weights = [
-                        enc.self_attn.sdp_attn.raw_weights.detach().cpu().numpy()\
-                        for enc in self.model.model.backbone.encoder.layers
-                    ]
-                    powerlaw_weights = [
-                        enc.self_attn.sdp_attn.attn_weights.detach().cpu().numpy()\
-                        for enc in self.model.model.backbone.encoder.layers
-                    ]
+                    if self.args.model.lower() == 'transformer':
+                        raw_scores = []
+                        powerlaw_scores = []
+                        raw_weights = []
+                        powerlaw_weights = []
+                        attn_layers = [
+                            self.model.encoder.attn_layers,
+                            self.model.decoder.layers,
+                            self.model.decoder.layers
+                        ]
+                        for idx, layers in enumerate(attn_layers):
+                            raw_scores.append([])
+                            powerlaw_scores.append([])
+                            raw_weights.append([])
+                            powerlaw_weights.append([])
+                            for layer in layers:
+                                if idx == 0:
+                                    attn = layer.attention
+                                elif idx == 1:
+                                    attn = layer.self_attention
+                                else:
+                                    attn = layer.cross_attention
+                                print("Raw weights", attn.inner_attention.raw_weights.detach().cpu().numpy().shape)
+                                raw_scores[-1].append(
+                                    np.histogram(
+                                        attn.inner_attention.raw_scores.detach().cpu().numpy().flatten(),
+                                        score_bins)[0]
+                                )
+                                powerlaw_scores[-1].append(
+                                    np.histogram(
+                                        attn.inner_attention.masked_scores.detach().cpu().numpy().flatten(),
+                                        score_bins)[0]
+                                )
+                                raw_weights[-1].append(
+                                    np.histogram(
+                                        attn.inner_attention.raw_weights.detach().cpu().numpy().flatten(),
+                                        weight_bins)[0]
+                                )
+                                powerlaw_weights[-1].append(
+                                    np.histogram(
+                                        attn.inner_attention.attn_weights.detach().cpu().numpy().flatten(),
+                                        weight_bins)[0]
+                                )
+                    else:
+                        raw_scores = [[
+                            np.histogram(
+                                enc.self_attn.sdp_attn.raw_scores.detach().cpu().numpy().flatten(),
+                                score_bins)[0]\
+                            for enc in self.model.model.backbone.encoder.layers
+                        ]]
+                        powerlaw_scores = [[
+                            np.histogram(
+                                enc.self_attn.sdp_attn.masked_scores.detach().cpu().numpy().flatten(),
+                                score_bins)[0]\
+                            for enc in self.model.model.backbone.encoder.layers
+                        ]]
+                        raw_weights = [[
+                            np.histogram(
+                                enc.self_attn.sdp_attn.raw_weights.detach().cpu().numpy().flatten(),
+                                weight_bins)[0]\
+                            for enc in self.model.model.backbone.encoder.layers
+                        ]]
+                        powerlaw_weights = [[
+                            np.histogram(
+                                enc.self_attn.sdp_attn.attn_weights.detach().cpu().numpy().flatten(),
+                                weight_bins)[0]\
+                            for enc in self.model.model.backbone.encoder.layers
+                        ]]
 
                 pred = outputs  # outputs.detach().cpu().numpy()  # .squeeze()
                 true = batch_y  # batch_y.detach().cpu().numpy()  # .squeeze()
@@ -316,10 +384,12 @@ class Exp_Main(Exp_Basic):
                 trues.append(true)
                 inputx.append(batch_x.detach().cpu().numpy())
                 if save_attn:
-                    attn_raw_scores.append(np.array(raw_score))
-                    attn_powerlaw_scores.append(np.array(powerlaw_score))
-                    attn_raw_weights.append(np.array(raw_weights))
-                    attn_powerlaw_weights.append(np.array(powerlaw_weights))
+                    print("combine raw", len(raw_scores), np.array(raw_weights[0]).shape)
+                    for i in range(len(raw_scores)):
+                        attn_raw_scores[i].append(np.array(raw_scores[i]))
+                        attn_powerlaw_scores[i].append(np.array(powerlaw_scores[i]))
+                        attn_raw_weights[i].append(np.array(raw_weights[i]))
+                        attn_powerlaw_weights[i].append(np.array(powerlaw_weights[i]))
                 if i % 20 == 0:
                     input = batch_x.detach().cpu().numpy()
                     gt = np.concatenate((input[0, :, -1], true[0, :, -1]), axis=0)
@@ -343,13 +413,14 @@ class Exp_Main(Exp_Basic):
             os.makedirs(folder_path)
 
         mae, mse, rmse, mape, mspe, rse, corr = metric(preds, trues)
-        print('mse:{}, mae:{}, rse:{}'.format(mse, mae, rse))
-        f = open("result.txt", 'a')
-        f.write(save_setting + "  \n")
-        f.write('mse:{}, mae:{}, rse:{}'.format(mse, mae, rse))
-        f.write('\n')
-        f.write('\n')
-        f.close()
+        if not save_attn:
+            print('mse:{}, mae:{}, rse:{}'.format(mse, mae, rse))
+            f = open("result.txt", 'a')
+            f.write(save_setting + "  \n")
+            f.write('mse:{}, mae:{}, rse:{}'.format(mse, mae, rse))
+            f.write('\n')
+            f.write('\n')
+            f.close()
 
         pred_mse = (np.sum(preds - trues, axis=1))**2
         pred_mae = np.abs(np.sum(preds - trues, axis=1))
@@ -357,6 +428,7 @@ class Exp_Main(Exp_Basic):
         np.save(os.path.join(folder_path, 'pred.npy'), preds)
         np.save(os.path.join(folder_path, 'mse.npy'), pred_mse)
         np.save(os.path.join(folder_path, 'mae.npy'), pred_mae)
+        del preds, pred_mse, pred_mae
         idx0 = setting.find("_")
         idx1 = setting.find("_pl")
         idx2 = setting.find("_", idx1+2)
@@ -366,47 +438,49 @@ class Exp_Main(Exp_Basic):
         )
         np.save(data_filename, trues)
         if save_attn:
-            score_bins = np.linspace(-500, 500, 2001)
-            attn_raw_scores = np.array(attn_raw_scores).swapaxes(0,1)
-            hist_attn_raw_scores = np.array([
-                np.histogram(attn_raw_scores[i].flatten(), score_bins)[0]\
-                for i in range(len(attn_raw_scores))
-            ])
-            attn_powerlaw_scores = np.array(attn_powerlaw_scores).swapaxes(0,1)
-            hist_attn_powerlaw_scores = np.array([
-                np.histogram(attn_powerlaw_scores[i].flatten(), score_bins)[0]\
-                for i in range(len(attn_powerlaw_scores))
-            ])
-            weight_bins = np.linspace(0, 1, 101)
-            attn_raw_weights = np.array(attn_raw_weights).swapaxes(0,1)
-            hist_attn_raw_weights = np.array([
-                np.histogram(attn_raw_weights[i].flatten(), weight_bins)[0]\
-                for i in range(len(attn_raw_weights))
-            ])
-            attn_powerlaw_weights = np.array(attn_powerlaw_weights).swapaxes(0,1)
-            hist_attn_powerlaw_weights = np.array([
-                np.histogram(attn_powerlaw_weights[i].flatten(), weight_bins)[0]\
-                for i in range(len(attn_powerlaw_weights))
-            ])
-            np.save(os.path.join(folder_path, 'attn_raw_scores.npy'), hist_attn_raw_scores)
-            np.save(os.path.join(folder_path, 'attn_powerlaw_scores.npy'), hist_attn_powerlaw_scores)
-            np.save(os.path.join(folder_path, 'attn_raw_weights.npy'), hist_attn_raw_weights)
-            np.save(os.path.join(folder_path, 'attn_powerlaw_weights.npy'), hist_attn_powerlaw_weights)
+            labels = ["encoder_SA_", "decoder_SA_", "decoder_CA_"]
             np.save(os.path.join(folder_path, 'score_bins.npy'), score_bins)
             np.save(os.path.join(folder_path, 'weight_bins.npy'), weight_bins)
-            np.save(os.path.join(folder_path, 'powerlaw_mask.npy'),
-                self.model.model.backbone.encoder.layers[0].self_attn.sdp_attn.powerlaw_mask.detach().cpu().numpy())
-            
-            if self.model.decomposition:
-                for enc in self.model.model_trend.backbone.encoder.layers:
-                    enc.self_attn.sdp_attn.record_scores = False
-                for enc in self.model.model_res.backbone.encoder.layers:
-                    enc.self_attn.sdp_attn.record_scores = False
+            print("Saving", len(raw_scores), np.array(raw_scores[0]).shape)
+            for idx in range(len(raw_scores)):
+                label = labels[idx]
+                print("LABEL", label)
+                comb_attn_raw_scores = np.sum(np.array(attn_raw_scores[idx]), 0)
+                comb_attn_powerlaw_scores = np.sum(np.array(attn_powerlaw_scores[idx]), 0)
+                comb_attn_raw_weights = np.sum(np.array(attn_raw_weights[idx]), 0)
+                comb_attn_powerlaw_weights = np.sum(np.array(attn_powerlaw_weights[idx]), 0)
+                print("SIZES", np.array(attn_raw_scores[idx]).shape, len(attn_raw_scores), comb_attn_raw_scores.shape)
+                np.save(os.path.join(folder_path, label + 'attn_raw_scores.npy'), comb_attn_raw_scores)
+                np.save(os.path.join(folder_path, label + 'attn_powerlaw_scores.npy'), comb_attn_powerlaw_scores)
+                np.save(os.path.join(folder_path, label + 'attn_raw_weights.npy'), comb_attn_raw_weights)
+                np.save(os.path.join(folder_path, label + 'attn_powerlaw_weights.npy'), comb_attn_powerlaw_weights)
+                
+                if self.args.model.lower() == 'transformer':
+                    if idx == 0:
+                       decay_mask = self.model.encoder.attn_layers[0].attention.inner_attention.powerlaw_mask.detach().cpu().numpy() 
+                    if idx == 1:
+                       decay_mask = self.model.decoder.layers[0].self_attention.inner_attention.powerlaw_mask.detach().cpu().numpy() 
+                    if idx == 2:
+                       decay_mask = self.model.decoder.layers[0].cross_attention.inner_attention.powerlaw_mask.detach().cpu().numpy() 
+                else:
+                    decay_mask = self.model.model.backbone.encoder.layers[0].self_attn.sdp_attn.powerlaw_mask.detach().cpu().numpy()
+                np.save(os.path.join(folder_path, label + 'powerlaw_mask.npy'), decay_mask)
+            if self.args.model.lower() == 'transformer':
+                for enc in self.model.encoder.attn_layers:
+                    enc.attention.inner_attention.record_scores = True
+                for dec in self.model.decoder.layers:
+                    dec.self_attention.inner_attention.record_scores = True
+                for dec in self.model.decoder.layers:
+                    dec.cross_attention.inner_attention.record_scores = True
             else:
-                for enc in self.model.model.backbone.encoder.layers:
-                    enc.self_attn.sdp_attn.record_scores = False
-
-        return
+                if self.model.decomposition:
+                    for enc in self.model.model_trend.backbone.encoder.layers:
+                        enc.self_attn.sdp_attn.record_scores = True
+                    for enc in self.model.model_res.backbone.encoder.layers:
+                        enc.self_attn.sdp_attn.record_scores = True
+                else:
+                    for enc in self.model.model.backbone.encoder.layers:
+                        enc.self_attn.sdp_attn.record_scores = True
 
     def predict(self, setting, load=False):
         pred_data, pred_loader = self._get_data(flag='pred')
