@@ -231,6 +231,14 @@ class Exp_Main(Exp_Basic):
         if test:
             print('loading model')
             self.model.load_state_dict(torch.load(os.path.join('./checkpoints/' + setting, 'checkpoint.pth')))
+        
+        folder_path = os.path.join(output_dir, 'results', save_setting)
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+        if os.path.exists(os.path.join(folder_path, "score_bins.npy")):
+            print(f"Found results for {setting} now exiting.")
+            return
+
 
         preds = []
         trues = []
@@ -245,9 +253,11 @@ class Exp_Main(Exp_Basic):
                 attn_powerlaw_scores.append([])
                 attn_raw_weights.append([])
                 attn_powerlaw_weights.append([])
+        """
         folder_path = output_dir + 'test_results/' + save_setting + '/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
+        """
 
         self.model.eval()
         if save_attn:
@@ -390,11 +400,13 @@ class Exp_Main(Exp_Basic):
                         attn_powerlaw_scores[i].append(np.array(powerlaw_scores[i]))
                         attn_raw_weights[i].append(np.array(raw_weights[i]))
                         attn_powerlaw_weights[i].append(np.array(powerlaw_weights[i]))
+                """
                 if i % 20 == 0:
                     input = batch_x.detach().cpu().numpy()
                     gt = np.concatenate((input[0, :, -1], true[0, :, -1]), axis=0)
                     pd = np.concatenate((input[0, :, -1], pred[0, :, -1]), axis=0)
                     visual(gt, pd, os.path.join(folder_path, str(i) + '.pdf'))
+                """
 
         if self.args.test_flop:
             test_params_flop((batch_x.shape[1],batch_x.shape[2]))
@@ -408,10 +420,6 @@ class Exp_Main(Exp_Basic):
         inputx = inputx.reshape(-1, inputx.shape[-2], inputx.shape[-1])
 
         # result save
-        folder_path = os.path.join(output_dir, 'results', save_setting)
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
-
         mae, mse, rmse, mape, mspe, rse, corr = metric(preds, trues)
         if not save_attn:
             print('mse:{}, mae:{}, rse:{}'.format(mse, mae, rse))
