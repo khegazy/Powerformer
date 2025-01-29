@@ -11,6 +11,7 @@ from torch import optim
 from torch.optim import lr_scheduler 
 
 import os
+import sys
 import time
 
 import warnings
@@ -223,7 +224,7 @@ class Exp_Main(Exp_Basic):
 
         return self.model
 
-    def test(self, setting, test=0, save_attn=False, output_dir="./", save_setting=None):
+    def test(self, setting, test=0, save_attn=False, save_attn_matrices=0, output_dir="./", save_setting=None):
         test_data, test_loader = self._get_data(flag='test')
         if save_setting == None:
             save_setting = setting
@@ -231,7 +232,7 @@ class Exp_Main(Exp_Basic):
         if test:
             print('loading model')
             self.model.load_state_dict(torch.load(os.path.join('./checkpoints/' + setting, 'checkpoint.pth')))
-        
+                
         folder_path = os.path.join(output_dir, 'results', save_setting)
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
@@ -240,19 +241,11 @@ class Exp_Main(Exp_Basic):
             return
 
 
+
+
         preds = []
         trues = []
         inputx = []
-        attn_raw_scores = [[]]
-        attn_powerlaw_scores = [[]]
-        attn_raw_weights = [[]]
-        attn_powerlaw_weights = [[]]
-        if self.args.model.lower() == 'transformer':
-            for i in range(2):
-                attn_raw_scores.append([])
-                attn_powerlaw_scores.append([])
-                attn_raw_weights.append([])
-                attn_powerlaw_weights.append([])
         """
         folder_path = output_dir + 'test_results/' + save_setting + '/'
         if not os.path.exists(folder_path):
@@ -260,7 +253,7 @@ class Exp_Main(Exp_Basic):
         """
 
         self.model.eval()
-        if save_attn:
+        if save_attn or save_attn_matrices > 0:
             if self.args.model.lower() == 'transformer':
                 for enc in self.model.encoder.attn_layers:
                     enc.attention.inner_attention.record_scores = True
@@ -277,6 +270,122 @@ class Exp_Main(Exp_Basic):
                 else:
                     for enc in self.model.model.backbone.encoder.layers:
                         enc.self_attn.sdp_attn.record_scores = True
+            
+        if save_attn_matrices > 0:
+            data_idxs = np.arange(len(test_data))
+            np.random.shuffle(data_idxs)
+            data_idxs = data_idxs[:save_attn_matrices]
+            batch_x, batch_y, batch_x_mark, batch_y_mark = [], [], [], []
+            data = [test_data.__getitem__(idx) for idx in data_idxs]
+            batch_x = torch.tensor([d[0] for d in data]).float().to(self.device)
+            batch_y = torch.tensor([d[1] for d in data]).float().to(self.device)
+            batch_x_mark = torch.tensor([d[0] for d in data]).float().to(self.device)
+            batch_y_mark = torch.tensor([d[0] for d in data]).float().to(self.device)
+
+            # decoder input
+            dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
+            dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
+            # encoder - decoder
+            if self.args.use_amp:
+                with torch.cuda.amp.autocast():
+                    if 'Linear' in self.args.model or 'TST' in self.args.model or 'ower' in self.args.model:
+                        outputs = self.model(batch_x)
+                        #outputs = self.model.evaluate(batch_x, self.args.pred_len)
+                    else:
+                        if self.args.output_attention:
+                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
+                        else:
+                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+            else:
+                if 'Linear' in self.args.model or 'TST' in self.args.model or 'ower' in self.args.model:
+                        outputs = self.model(batch_x)
+                        #outputs = self.model.evaluate(batch_x, self.args.pred_len)
+                else:
+                    if self.args.output_attention:
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)[0]
+
+                    else:
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+
+
+            raw_weights, raw_scores = [], []
+            weights, scores = [], []
+            decay_mask = None
+            if self.args.model.lower() == 'powerformer' or self.args.model.lower() == 'patchtst':
+                if self.model.decomposition:
+                    for ilr, enc in enumerate(self.model.model_trend.backbone.encoder.layers):
+                        raw_scores.append((enc.self_attn.sdp_attn.raw_scores, 'trend', ilr))
+                        raw_weights.append((enc.self_attn.sdp_attn.raw_weights, 'trend', ilr))
+                        scores.append((enc.self_attn.sdp_attn.masked_scores, 'trend', ilr))
+                        weights.append((enc.self_attn.sdp_attn.attn_weights, 'trend', ilr))
+                    for ilr, enc in enumerate(self.model.model_res.backbone.encoder.layers):
+                        raw_scores.append((enc.self_attn.sdp_attn.raw_scores, 'residual', ilr))
+                        raw_weights.append((enc.self_attn.sdp_attn.raw_weights, 'residual', ilr))
+                        scores.append((enc.self_attn.sdp_attn.masked_scores, 'residual', ilr))
+                        weights.append((enc.self_attn.sdp_attn.attn_weights, 'residual', ilr))
+                    decay_mask = self.model.model_res.backbone.encoder.layers[-1].self_attn.sdp_attn.powerlaw_mask
+                else:
+                    decay_mask = self.model.model.backbone.encoder.layers[-1].self_attn.sdp_attn.powerlaw_mask
+                    for ilr, enc in enumerate(self.model.model.backbone.encoder.layers):
+                        print("SHAPES", decay_mask.shape, enc.self_attn.sdp_attn.raw_scores.shape, enc.self_attn.sdp_attn.raw_weights.shape, enc.self_attn.sdp_attn.masked_scores.shape, enc.self_attn.sdp_attn.attn_weights.shape)
+                        raw_scores.append((enc.self_attn.sdp_attn.raw_scores, 'total', ilr))
+                        raw_weights.append((enc.self_attn.sdp_attn.raw_weights, 'total', ilr))
+                        scores.append((enc.self_attn.sdp_attn.masked_scores, 'total', ilr))
+                        weights.append((enc.self_attn.sdp_attn.attn_weights, 'total', ilr))
+            elif self.args.model.lower() == 'transformer':
+                decay_mask = self.model.encoder.attn_layers[-1].attention.inner_attention.powerlaw_mask 
+                for ilr, enc in enumerate(self.model.encoder.attn_layers):
+                    raw_scores.append((enc.attention.inner_attention.raw_scores, 'encoder_SA', ilr))
+                    raw_weights.append((enc.attention.inner_attention.raw_weights, 'encoder_SA', ilr))
+                    scores.append((enc.attention.inner_attention.masked_scores, 'encoder_SA', ilr))
+                    weights.append((enc.attention.inner_attention.attn_weights, 'encoder_SA', ilr))
+                for ilr, dec in enumerate(self.model.decoder.layers):
+                    raw_scores.append((dec.self_attention.inner_attention.raw_scores, 'decoder_SA', ilr))
+                    raw_weights.append((dec.self_attention.inner_attention.raw_weights, 'decoder_SA', ilr))
+                    scores.append((dec.self_attention.inner_attention.masked_scores, 'decoder_SA', ilr))
+                    weights.append((dec.self_attention.inner_attention.attn_weights, 'decoder_SA', ilr))
+                for ilr, dec in enumerate(self.model.decoder.layers):
+                    raw_scores.append((dec.cross_attention.inner_attention.raw_scores, 'decoder_CA', ilr))
+                    raw_weights.append((dec.cross_attention.inner_attention.raw_weights, 'decoder_CA', ilr))
+                    scores.append((dec.cross_attention.inner_attention.masked_scores, 'decoder_CA', ilr))
+                    weights.append((dec.cross_attention.inner_attention.attn_weights, 'decoder_CA', ilr))
+            else:
+                raise NotImplementedError(f"Cannot handle model type {self.args.model}")
+            
+            np.save(
+                os.path.join(folder_path, f"attn_matrices_indices.npy"), data_idxs
+            )
+            np.save(os.path.join(folder_path, f"decay_mask.npy"), decay_mask.detach().cpu().numpy())
+            loop = [
+                (raw_scores, 'raw_scores'), (scores, 'scores'),
+                (raw_weights, 'raw_weights'), (weights, 'weights')
+            ]
+            for data, label in loop:
+                for vals, layer_type, layer_num in data:
+                    np.save(
+                        os.path.join(
+                            folder_path, f"{layer_type}_{label}_{layer_num}.npy"
+                        ),
+                        vals.detach().cpu().numpy()
+                    )
+            print("Saved attention matrices, now exiting")
+            sys.exit()
+
+
+
+        if save_attn:
+            attn_raw_scores = [[]]
+            attn_powerlaw_scores = [[]]
+            attn_raw_weights = [[]]
+            attn_powerlaw_weights = [[]]
+            if self.args.model.lower() == 'transformer':
+                for i in range(2):
+                    attn_raw_scores.append([])
+                    attn_powerlaw_scores.append([])
+                    attn_raw_weights.append([])
+                    attn_powerlaw_weights.append([])
+
+
         with torch.no_grad():
             score_bins = np.linspace(-500, 500, 2001)
             weight_bins = np.linspace(0, 1, 101)

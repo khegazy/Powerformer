@@ -16,6 +16,9 @@ if __name__ == '__main__':
     parser.add_argument('--model_id', type=str, required=True, default='test', help='model id')
     parser.add_argument('--model', type=str, required=True, default='Autoformer',
                         help='model name, options: [Autoformer, Informer, Transformer]')
+    parser.add_argument('--save_attn', action='store_true', help='Save attention distribution')
+    parser.add_argument('--save_attn_matrices', type=int, default=0, help='Save number of randomly selected attention matrices')
+    
 
     # data loader
     parser.add_argument('--data', type=str, required=True, default='ETTm1', help='dataset type')
@@ -160,6 +163,7 @@ if __name__ == '__main__':
             if args.is_sequential:
                 setting = "Sequential_" + setting
 
+            """
             if os.path.exists("./result.txt"):
                 for ln in open("./result.txt", "r"):
                     if setting in ln:
@@ -167,6 +171,7 @@ if __name__ == '__main__':
                         sys.exit()
             if args.attn_decay_type is not None and args.attn_decay_type.lower() == "zeta" and args.attn_decay_scale > 5.5:
                 sys.exit()
+            """
 
 
             exp = Exp(args)  # set experiments
@@ -220,7 +225,6 @@ if __name__ == '__main__':
                                                                                                     attn_decay_tag,
                                                                                                     args.des, args.itr)
 
-
         if args.is_sequential:
             save_setting = "Sequential_" + save_setting
             chkpt_setting = "Sequential_" + chkpt_setting
@@ -228,6 +232,12 @@ if __name__ == '__main__':
         print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(save_setting))
         if args.is_sequential:
             exp.args.pred_len = input_pred_len
-        exp.test(chkpt_setting, test=1, save_attn=True, save_setting=save_setting)
+        exp.test(
+            chkpt_setting,
+            test=1,
+            save_setting=save_setting,
+            save_attn=args.save_attn,
+            save_attn_matrices=args.save_attn_matrices
+        )
         torch.cuda.empty_cache()
         
