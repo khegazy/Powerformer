@@ -7,6 +7,7 @@ from models import (
     DLinear,
     Linear,
     NLinear,
+    PatchTST,
     Powerformer,
 )
 from utils.tools import EarlyStopping, adjust_learning_rate, visual, test_params_flop
@@ -42,7 +43,7 @@ class Exp_Main(Exp_Basic):
             "DLinear": DLinear,
             "NLinear": NLinear,
             "Linear": Linear,
-            #'PatchTST': PatchTST,
+            "PatchTST": PatchTST,
             "Powerformer": Powerformer,
         }
         model = model_dict[self.args.model].Model(self.args).float()
