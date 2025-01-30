@@ -134,19 +134,3 @@ class CausalLocalMasks(nn.Module):
         mask[times > int(t[-1])] = -np.inf
 
         return self._enforce_causality(torch.tensor(mask))
-
-    
-    def _gauss_attn_decay(self):
-        print("comparing adding vs multiplying attn")  # DEBUG
-
-        mask = 1 - torch.exp(-0.5 * (self.times / self.mask_scale) ** 2)
-        mask = mask.unsqueeze(0).unsqueeze(0)
-        return self._enforce_causality(mask, self.times)
-
-    
-    def _tdist_attn_decay(self):
-        print("comparing adding vs multiplying attn")  # DEBUG
-        mask = 1 - (1 + self.times**2 / self.mask_scale) ** (
-            -0.5 * (self.mask_scale + 1)
-        )
-        return self._enforce_causality(mask, self.times)
