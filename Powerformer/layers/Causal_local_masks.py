@@ -59,18 +59,8 @@ class CausalLocalMasks(nn.Module):
                 self.get_decay_mask = self._sim_power_law_mask
             else:
                 self.decay_mask = self._sim_power_law_mask()
-        elif self.mask_type.lower() == "gauss":
-            self.decay_mask = self._enforce_causality(
-                self._gauss_attn_decay(self.mask_scale, self.times)
-            )
-        elif self.mask_type.lower() == "tdist":
-            self.decay_mask = self._enforce_causality(
-                self._tdist_attn_decay(self.mask_scale, self.times)
-            )
         else:
             raise ValueError(f"Cannot handle attention decay type {self.mask_type}")
-
-        # if self.mask_type is not None and not train_attn_decay:
 
         if self.get_decay_mask is None:
             requires_grad = train_attn_decay and (
@@ -160,6 +150,3 @@ class CausalLocalMasks(nn.Module):
             -0.5 * (self.mask_scale + 1)
         )
         return self._enforce_causality(mask, self.times)
-
-        self.alpha = -1 * torch.tensor(np.abs(alpha))
-        self.scale_weight = nn.Parameter(torch.zeros(1))
