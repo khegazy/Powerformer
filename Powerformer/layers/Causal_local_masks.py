@@ -32,11 +32,9 @@ class CausalLocalMasks(nn.Module):
 
         if self.mask_type is None or self.mask_type.lower() == "none":
             self.decay_mask = torch.zeros((1))
-        elif self.mask_type.lower() == "causal":
-            self.decay_mask = torch.zeros((self.patch_num, self.patch_num))
         elif self.mask_type.lower() == "step":
             self.mask_scale = int(self.mask_scale)
-            if self.mask_scale[0] < 1:
+            if self.mask_scale < 1:
                 raise ValueError(
                     "Attention decay scale must be >= 1 for step distribution"
                 )
@@ -76,7 +74,7 @@ class CausalLocalMasks(nn.Module):
 
         if self.get_decay_mask is None:
             requires_grad = train_attn_decay and (
-                self.mask_type is not None and self.mask_type.lower() == "causal"
+                self.mask_type is not None and self.mask_type.lower() != "step"
             )
 
             self.decay_mask = nn.Parameter(self.decay_mask, requires_grad=requires_grad)
@@ -86,8 +84,11 @@ class CausalLocalMasks(nn.Module):
                 self.get_decay_mask = self._return_decay_mask
 
         if self.mask_type is not None:
+            requires_grad = train_attn_decay and (
+                'utter' not in self.mask_type and self.mask_type != 'step'
+            )
             self.mask_scale = nn.Parameter(
-                torch.tensor(self.mask_scale), requires_grad=requires_grad
+                torch.tensor(self.mask_scale), requires_grad=requires_grad 
             )
 
     
@@ -104,6 +105,7 @@ class CausalLocalMasks(nn.Module):
 
     
     def _enforce_causality(self, mask, replacement=-1 * torch.inf):
+        print("SHAPES", mask.shape, self.times.shape)
         mask[self.times < -1e-10] = replacement
         return mask
 
@@ -111,7 +113,7 @@ class CausalLocalMasks(nn.Module):
     def _step_distribution(self, times):
         mask = torch.zeros_like(times)
         mask[torch.abs(times) > self.mask_scale] = -1 * torch.inf
-        return self._enforce_causality(mask, times)
+        return mask
 
     
     def _power_law(self, times):
