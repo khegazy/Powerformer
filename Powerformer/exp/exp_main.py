@@ -454,17 +454,21 @@ class Exp_Main(Exp_Basic):
         pred_mae = np.abs(np.sum(preds - trues, axis=1))
         np.save(
             os.path.join(folder_path + "metrics.npy"),
-            np.array([mae, mse, rmse, mape, mspe, rse, corr]),
+            np.concatenate([np.array([mae, mse, rmse, mape, mspe, rse]), corr])
         )
         np.save(os.path.join(folder_path, "pred.npy"), preds)
         np.save(os.path.join(folder_path, "mse.npy"), pred_mse)
         np.save(os.path.join(folder_path, "mae.npy"), pred_mae)
         del preds, pred_mse, pred_mae
         idx0 = setting.find("_")
-        idx1 = setting.find("_pl")
+        idx1 = setting.find("_sl")
         idx2 = setting.find("_", idx1 + 2)
+        idx3 = setting.find("_pl", idx2)
+        idx4 = setting.find("_", idx3 + 2)
         data_filename = os.path.join(
-            output_dir, "results", f"data_{setting[:idx0]}{setting[idx1:idx2]}.npy"
+            output_dir,
+            "results",
+            f"data_{setting[:idx0]}{setting[idx1:idx2]}{setting[idx3:idx4]}.npy"
         )
         np.save(data_filename, trues)
         if save_attn:
