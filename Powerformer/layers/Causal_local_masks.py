@@ -95,7 +95,6 @@ class CausalLocalMasks(nn.Module):
 
     
     def _enforce_causality(self, mask, replacement=-1 * torch.inf):
-        print("SHAPES", mask.shape, self.times.shape)
         mask[self.times < -1e-10] = replacement
         return mask
 

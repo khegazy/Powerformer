@@ -223,7 +223,6 @@ if __name__ == "__main__":
     torch.manual_seed(fix_seed)
     np.random.seed(fix_seed)
 
-    print("USE GPU", args.use_gpu, torch.cuda.is_available())
     args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
 
     if args.use_gpu and args.use_multi_gpu:
@@ -231,6 +230,11 @@ if __name__ == "__main__":
         device_ids = args.devices.split(",")
         args.device_ids = [int(id_) for id_ in device_ids]
         args.gpu = args.device_ids[0]
+
+    # Only Powerformer uses attention filters, this keeps output files clean
+    if args.model.lower() != 'powerformer':
+        args.attn_decay_type = None
+        args.attn_decay_scale = 0
 
     # Sequential settings
     input_pred_len = args.pred_len

@@ -50,7 +50,6 @@ class Exp_Main(Exp_Basic):
 
         if self.args.use_multi_gpu and self.args.use_gpu:
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
-            # model = nn.DataParallel(model)
         return model
 
 
@@ -98,7 +97,6 @@ class Exp_Main(Exp_Basic):
                             or "ower" in self.args.model
                         ):
                             outputs = self.model(batch_x)
-                            # outputs = self.model.evaluate(batch_x, self.args.pred_len)
                         else:
                             if self.args.output_attention:
                                 outputs = self.model(
@@ -115,7 +113,6 @@ class Exp_Main(Exp_Basic):
                         or "ower" in self.args.model
                     ):
                         outputs = self.model(batch_x)
-                        # outputs = self.model.evaluate(batch_x, self.args.pred_len)
                     else:
                         if self.args.output_attention:
                             outputs = self.model(
@@ -227,7 +224,6 @@ class Exp_Main(Exp_Basic):
                         or "ower" in self.args.model
                     ):
                         outputs = self.model(batch_x)
-                        # outputs = self.model.evaluate(batch_x, self.args.pred_len)
                     else:
                         if self.args.output_attention:
                             outputs = self.model(
