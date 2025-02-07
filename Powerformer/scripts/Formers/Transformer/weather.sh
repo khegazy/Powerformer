@@ -16,9 +16,9 @@ itr=0
 random_seed=2021
 
 root_path_name=./datasets/
-data_path_name=ETT-small/ETTm1.csv
-model_id_name=ETTm1
-data_name=ETTm1
+data_path_name=weather/weather.csv
+model_id_name=Weather
+data_name=custom
 
 python3 -u run_longExp.py \
     --attn_decay_type ${decay_type} \
@@ -37,9 +37,9 @@ python3 -u run_longExp.py \
     --e_layers 2 \
     --d_layers 1 \
     --factor 3 \
-    --enc_in 7 \
-    --dec_in 7 \
-    --c_out 7 \
+    --enc_in 21 \
+    --dec_in 21 \
+    --c_out 21 \
     --des 'Exp' \
     --itr ${itr} \
     "$@" >> logs/LongForecasting/${model_name}'_'${model_id_name}'_'${seq_len}'_'${pred_len}.log

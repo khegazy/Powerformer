@@ -16,9 +16,9 @@ itr=0
 random_seed=2021
 
 root_path_name=./datasets/
-data_path_name=ETT-small/ETTm1.csv
-model_id_name=ETTm1
-data_name=ETTm1
+data_path_name=ETT-small/ETTm2.csv
+model_id_name=ETTm2
+data_name=ETTm2
 
 python3 -u run_longExp.py \
     --attn_decay_type ${decay_type} \

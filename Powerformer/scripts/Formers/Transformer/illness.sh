@@ -10,17 +10,17 @@ fi
 model_name=Transformer
 decay_type="powerLaw"
 decay_scale=0.5
-seq_len=256
-pred_len=96
+seq_len=36
+pred_len=24
 itr=0
 random_seed=2021
 
 root_path_name=./datasets/
-data_path_name=ETT-small/ETTm1.csv
-model_id_name=ETTm1
-data_name=ETTm1
+data_path_name=illness/national_illness.csv
+model_id_name=Illness
+data_name=custom
 
-python3 -u run_longExp.py \
+python -u run_longExp.py \
     --attn_decay_type ${decay_type} \
     --attn_decay_scale ${decay_scale} \
     --random_seed ${random_seed} \
@@ -29,10 +29,10 @@ python3 -u run_longExp.py \
     --data_path ${data_path_name} \
     --model_id ${model_id_name} \
     --model ${model_name} \
-    --data ${data_name} \
+    --data custom \
     --features M \
     --seq_len ${seq_len} \
-    --label_len 48 \
+    --label_len 18 \
     --pred_len ${pred_len} \
     --e_layers 2 \
     --d_layers 1 \

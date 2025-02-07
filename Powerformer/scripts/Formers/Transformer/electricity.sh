@@ -1,4 +1,3 @@
-# ALL scripts in this file come from Autoformer
 if [ ! -d "./logs" ]; then
     mkdir ./logs
 fi
@@ -16,9 +15,9 @@ itr=0
 random_seed=2021
 
 root_path_name=./datasets/
-data_path_name=ETT-small/ETTm1.csv
-model_id_name=ETTm1
-data_name=ETTm1
+data_path_name=electricity/electricity.csv
+model_id_name=Electricity
+data_name=custom
 
 python3 -u run_longExp.py \
     --attn_decay_type ${decay_type} \
@@ -29,7 +28,7 @@ python3 -u run_longExp.py \
     --data_path ${data_path_name} \
     --model_id ${model_id_name} \
     --model ${model_name} \
-    --data ${data_name} \
+    --data custom \
     --features M \
     --seq_len ${seq_len} \
     --label_len 48 \
@@ -37,9 +36,9 @@ python3 -u run_longExp.py \
     --e_layers 2 \
     --d_layers 1 \
     --factor 3 \
-    --enc_in 7 \
-    --dec_in 7 \
-    --c_out 7 \
+    --enc_in 321 \
+    --dec_in 321 \
+    --c_out 321 \
     --des 'Exp' \
     --itr ${itr} \
     "$@" >> logs/LongForecasting/${model_name}'_'${model_id_name}'_'${seq_len}'_'${pred_len}.log
