@@ -1,10 +1,10 @@
-# Powerformer (In Submission)
+# Powerformer
 
 ### This is the official implementation of Powerformer: [Powerformer: A Transformer with Weighted Causal Attention for Time-series Forecasting]. 
 
 ## Temporally Local and Causal Inductive Biases in Time-Series
 
-Transformers have recently shown strong performance in time-series forecasting, but their all-to-all attention mechanism overlooks the (temporal) causal and often (temporally) local nature of data. We introduce Powerformer, a novel Transformer variant that replaces noncausal attention weights with causal weights that are reweighted according to a smooth heavy-tailed decay. More concretely, we impose a power-law decay on causally connected weights since pairwise temporal correlations in many datasets decay as a power-law. This simple yet effective modification endows the model with an inductive bias favoring temporally local dependencies, while still allowing sufficient flexibility to learn the unique correlation structure of each dataset. Our empirical results demonstrate that Powerformer not only achieves state-of-the-art accuracy on public time-series benchmarks, but also that it offers improved interpretability of attention patterns.
+Transformers have recently shown strong performance in time-series forecasting, but their all-to-all attention mechanism overlooks the (temporal) causal and often (temporally) local nature of data. We introduce Powerformer, a novel Transformer variant that replaces noncausal attention weights with causal weights that are reweighted according to a smooth heavy-tailed decay. More concretely, we impose a power-law decay on causally connected weights since pairwise temporal correlations in many datasets decay as a power-law. This simple yet effective modification endows the model with an inductive bias favoring temporally local dependencies, while still allowing sufficient flexibility to learn the unique correlation structure of each dataset. Our empirical results demonstrate that Powerformer not only achieves state-of-the-art accuracy on public time-series benchmarks, but also offers improved interpretability of attention patterns.
 
 ## Key Designs
 
@@ -18,7 +18,7 @@ Powerformer is a Transformer-based model that combines causal and local inductiv
 
 :star: **Transformer Time-Series Inductive Bias**: By Replacing all traditional multihead self-attention with WCMHA we impose causal and local inductive biases that generate attention distributions that are well aligned with natural power-law pairwise correlation structures. Furthermore, WCMHA allows the attention mechanism to strongly attend to highly correlated structures within the heavy tail of the attention decay (see Fig. 1).
 
-:star: **Patching**: Patching combines time-series data into subseries-level patches which are served as input tokens to Transformer. Patching was introduced by [PatchTST](https://github.com/yuqinie98/PatchTST) and allows for a longer lookback window while removing noisy high-frequency components. 
+:star: **Patching**: Patching combines time-series data into subseries-level patches serving as input tokens to Transformer. Patching was introduced by [PatchTST](https://github.com/yuqinie98/PatchTST) and allows for a longer lookback window while removing noisy high-frequency components. 
 
 :star: **Channel-independence**: Multivariate time-series data are separated into single univariate time-series that share the same embedding and Transformer weights across all multivariate channels. This method simplifies Powerformer's architecture and promotes interpretability, which is important to our work as we probed the effects of causal and local inductive biases on Transformer-based time-series model. This univariate decomposition was explored in [PatchTST](https://github.com/yuqinie98/PatchTST). 
 
@@ -28,7 +28,7 @@ Powerformer is a Transformer-based model that combines causal and local inductiv
 
 ### Comparison to Benchmark
 
-Powerformer outperforms other state-of-the-art models on standard time-series benchmarks, as shown in Table 1. Powerformer achieves best performance on 47 of the evaluation tasks, compared to the next best performing model [PatchTST](https://github.com/yuqinie98/PatchTST) which gets 17. 
+Powerformer outperforms other state-of-the-art models on standard time-series benchmarks, as shown in Table 1. Powerformer achieves the best performance on 47 of the evaluation tasks, compared to the next best performing model [PatchTST](https://github.com/yuqinie98/PatchTST) which gets 17. 
 
 
 ![table_benchmark](images/benchmark_results.png)
@@ -53,7 +53,7 @@ The results for all experiments will be saved in ```./result.txt``` along with t
 
 4. Evaluation. To evaluate Powerformer and save the attention weight and score distributions use the flag ```--is_training 0``` and one of the following.
 * ```--save_attn```: Saves the attention weight and score histogram distributions before and after applying the mask for the test set.
-* ```--save_attn_matrices```: Saves attention matrices only for a few randomly selected test samples and will exit afterwards.
+* ```--save_attn_matrices```: Saves attention matrices only for a few randomly selected test samples and will exit afterward.
 
 ## Hyperparameters and Important Flags
 ```--seq_len```: Input sequence length used to forecast future results.
