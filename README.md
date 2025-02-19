@@ -1,6 +1,6 @@
 # Powerformer
 
-### This is the official implementation of Powerformer: [Powerformer: A Transformer with Weighted Causal Attention for Time-series Forecasting]. 
+### This is the official implementation of [Powerformer: Powerformer: A Transformer with Weighted Causal Attention for Time-series Forecasting](https://arxiv.org/abs/2502.06151). 
 
 ## Temporally Local and Causal Inductive Biases in Time-Series
 
