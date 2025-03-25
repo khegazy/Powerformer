@@ -32,6 +32,10 @@ class CausalLocalMasks(nn.Module):
 
         if self.mask_type is None or self.mask_type.lower() == "none":
             self.decay_mask = torch.zeros((1))
+        elif self.mask_type.lower() == "causal":
+            self.decay_mask = self._enforce_causality(
+                torch.zeros_like(self.times)
+            )
         elif self.mask_type.lower() == "step":
             self.mask_scale = int(self.mask_scale)
             if self.mask_scale < 1:
