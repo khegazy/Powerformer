@@ -467,8 +467,7 @@ $RECYCLE.BIN/
 
 */checkpoints/*
 */results/*
-*plot*
-*Plot*
+*plots/*png
 *.tex
 *logs*
 *.pdf
