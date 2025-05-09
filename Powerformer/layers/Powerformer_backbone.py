@@ -1,6 +1,7 @@
 __all__ = ["Powerformer_backbone"]
 
 # Cell
+import time
 from typing import Callable, Optional
 import torch
 from torch import nn
@@ -32,6 +33,7 @@ class Powerformer_backbone(nn.Module):
         d_k: Optional[int] = None,
         d_v: Optional[int] = None,
         d_ff: int = 256,
+        attn_window=None,
         norm: str = "BatchNorm",
         attn_dropout: float = 0.0,
         dropout: float = 0.0,
@@ -94,6 +96,7 @@ class Powerformer_backbone(nn.Module):
             d_k=d_k,
             d_v=d_v,
             d_ff=d_ff,
+            attn_window=attn_window,
             attn_dropout=attn_dropout,
             dropout=dropout,
             act=act,
@@ -215,6 +218,7 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
         d_k=None,
         d_v=None,
         d_ff=256,
+        attn_window=None,
         norm="BatchNorm",
         attn_dropout=0.0,
         dropout=0.0,
@@ -261,6 +265,7 @@ class TSTiEncoder(nn.Module):  # i means channel-independent
             d_v=d_v,
             d_ff=d_ff,
             norm=norm,
+            attn_window=attn_window,
             attn_dropout=attn_dropout,
             dropout=dropout,
             pre_norm=pre_norm,
@@ -309,6 +314,7 @@ class TSTEncoder(nn.Module):
         d_v=None,
         d_ff=None,
         patch_num=0,
+        attn_window=None,
         norm="BatchNorm",
         attn_dropout=0.0,
         dropout=0.0,
@@ -334,6 +340,7 @@ class TSTEncoder(nn.Module):
                     d_v=d_v,
                     d_ff=d_ff,
                     norm=norm,
+                    attn_window=attn_window,
                     attn_dropout=attn_dropout,
                     dropout=dropout,
                     patch_num=patch_num,
@@ -387,6 +394,7 @@ class TSTEncoderLayer(nn.Module):
         d_k=None,
         d_v=None,
         d_ff=256,
+        attn_window=None,
         store_attn=False,
         patch_num=0,
         norm="BatchNorm",
@@ -417,6 +425,7 @@ class TSTEncoderLayer(nn.Module):
             d_k,
             d_v,
             patch_num=patch_num,
+            attn_window=attn_window,
             attn_dropout=attn_dropout,
             proj_dropout=dropout,
             res_attention=res_attention,
@@ -472,15 +481,13 @@ class TSTEncoderLayer(nn.Module):
         if self.res_attention:
             src2, attn, scores = self.self_attn(
                 src,
-                src,
-                src,
-                prev,
+                prev=prev,
                 key_padding_mask=key_padding_mask,
                 attn_mask=attn_mask,
             )
         else:
             src2, attn = self.self_attn(
-                src, src, src, key_padding_mask=key_padding_mask, attn_mask=attn_mask
+                src, key_padding_mask=key_padding_mask, attn_mask=attn_mask
             )
         if self.store_attn:
             self.attn = attn
@@ -517,6 +524,7 @@ class _MultiheadAttention(nn.Module):
         d_k=None,
         d_v=None,
         res_attention=False,
+        attn_window=None,
         attn_dropout=0.0,
         proj_dropout=0.0,
         qkv_bias=True,
@@ -535,6 +543,8 @@ class _MultiheadAttention(nn.Module):
             mask:    [q_len x q_len]
         """
         super().__init__()
+        self.attn_window = attn_window
+        self.d_model = d_model
         d_k = d_model // n_heads if d_k is None else d_k
         d_v = d_model // n_heads if d_v is None else d_v
 
@@ -549,6 +559,7 @@ class _MultiheadAttention(nn.Module):
         self.sdp_attn = _ScaledDotProductAttention(
             d_model,
             n_heads,
+            attn_window=self.attn_window,
             attn_dropout=attn_dropout,
             res_attention=self.res_attention,
             lsa=lsa,
@@ -565,7 +576,56 @@ class _MultiheadAttention(nn.Module):
             nn.Linear(n_heads * d_v, d_model), nn.Dropout(proj_dropout)
         )
 
+        if self.attn_window is not None:
+            self.comp_reshape = torch.compile(self._reshape_test)
+            self.T_idxs, self.lt_idxs = [], []
+            self.rt_idxs = []
+            for T in range(patch_num):
+                for t in range(self.attn_window):
+                    self.T_idxs.append(T)
+                    self.lt_idxs.append(t)
+                    self.rt_idxs.append(0)
+            self.rt_idxs = torch.tensor(self.rt_idxs)
+
     
+    def __reshape_K_V(self, M):
+        if self.attn_window is None:
+            return M
+        t0 = time.time()
+        B, T, D = M.shape
+        pad = torch.zeros(
+            (B, self.attn_window, D),
+            requires_grad=True,
+            device=M.device
+        )
+        M_pad = torch.concatenate([pad, M], dim=1)
+
+        t1 = time.time()
+        M_reshape = torch.stack(
+            [M_pad[:,i:i+self.attn_window,:] for i in range(M.shape[1])]
+        ).transpose(0,1)
+        print("RESHAPE TIME", time.time() - t0, time.time() - t1)
+        return M_reshape
+
+    def _reshape_K_V(self, M, wtf=True):
+        if self.attn_window is None or True:
+            return M
+        #t0 = time.time()
+        B, T, D = M.shape
+
+        output = M[:,self.rt_idxs,:]
+        output = torch.reshape(output, (B, T, self.attn_window, D))
+        #print("RESHAPE TIME!!!!", time.time() - t0)
+        return output
+    
+    def _reshape_test(self, M):
+        #t0 = time.time()
+        B, T, D = M.shape
+
+        output = M[:,self.rt_idxs,:]
+        return torch.reshape(output, (B, T, self.attn_window, D))
+
+
     def forward(
         self,
         Q: Tensor,
@@ -576,23 +636,53 @@ class _MultiheadAttention(nn.Module):
         attn_mask: Optional[Tensor] = None,
     ):
 
+
+        t0 = time.time()
+        self.comp_reshape(Q)
+        print("reshape TIME", time.time() - t0)
+        
+        t0 = time.time()
         bs = Q.size(0)
-        if K is None:
-            K = Q
-        if V is None:
-            V = Q
+        if K is None and V is None:
+            K = self._reshape_K_V(Q)
+            V = K
+        elif K is None:
+            K = self._reshape_K_V(Q)
+            V = self._reshape_K_V(V)
+        elif V is None:
+            K = self._reshape_K_V(K)
+            V = self._reshape_K_V(Q)
+        else:
+            K = self._reshape_K_V(K)
+            V = self._reshape_K_V(V)
 
-        # Linear (+ split in multiple heads)
-        q_s = (
-            self.W_Q(Q).view(bs, -1, self.n_heads, self.d_k).transpose(1, 2)
-        )  # q_s    : [bs x n_heads x max_q_len x d_k]
-        k_s = (
-            self.W_K(K).view(bs, -1, self.n_heads, self.d_k).permute(0, 2, 3, 1)
-        )  # k_s    : [bs x n_heads x d_k x q_len] - transpose(1,2) + transpose(2,3)
-        v_s = (
-            self.W_V(V).view(bs, -1, self.n_heads, self.d_v).transpose(1, 2)
-        )  # v_s    : [bs x n_heads x q_len x d_v]
-
+        # Linear 
+        q = self.W_Q(Q)
+        k = self.W_K(K)
+        v = self.W_V(V) 
+        
+        #split in multiple heads
+        if len(k.shape) == 3:
+            q_s = (
+                q.view(bs, -1, self.n_heads, self.d_k).transpose(1, 2)
+            )  # q_s    : [bs x n_heads x max_q_len x d_k]
+            k_s = (
+                k.view(bs, -1, self.n_heads, self.d_k).permute(0, 2, 3, 1)
+            )  # k_s    : [bs x n_heads x d_k x q_len] - transpose(1,2) + transpose(2,3)
+            v_s = (
+                v.view(bs, -1, self.n_heads, self.d_v).transpose(1, 2)
+            )  # v_s    : [bs x n_heads x q_len x d_v]
+        else:
+            q_s = (
+                q.view(bs, -1, self.n_heads, self.d_k).transpose(1, 2).unsqueeze(-2)
+            )  # q_s    : [bs x n_heads x max_q_len x 1 x d_k]
+            k_s = (
+                k.view(bs, -1, self.attn_window, self.n_heads, self.d_k).permute(0, 3, 1, 4, 2)
+            )  # k_s    : [bs x n_heads x max_q_len x d_k x q_len] - transpose(1,2) + transpose(2,3)
+            v_s = (
+                v.view(bs, -1, self.attn_window, self.n_heads, self.d_v).permute(0, 3, 1, 2, 4)
+            )  # v_s    : [bs x n_heads x max_q_len x q_len x d_v]
+       
         # Apply Scaled Dot-Product Attention (multiple heads)
         if self.res_attention:
             output, attn_weights, attn_scores = self.sdp_attn(
@@ -614,6 +704,7 @@ class _MultiheadAttention(nn.Module):
             output.transpose(1, 2).contiguous().view(bs, -1, self.n_heads * self.d_v)
         )  # output: [bs x q_len x n_heads * d_v]
         output = self.to_out(output)
+        print("ATTN TIME", time.time() - t0)
 
         if self.res_attention:
             return output, attn_weights, attn_scores
@@ -630,6 +721,7 @@ class _ScaledDotProductAttention(CausalLocalMasks):
         self,
         d_model,
         n_heads,
+        attn_window=None,
         attn_dropout=0.0,
         res_attention=False,
         lsa=False,
@@ -645,7 +737,9 @@ class _ScaledDotProductAttention(CausalLocalMasks):
             attn_decay_scale=attn_decay_scale,
             patch_num=patch_num,
             train_attn_decay=train_attn_decay,
+            attn_window=attn_window
         )
+        self.attn_window = attn_window
         self.attn_dropout = nn.Dropout(attn_dropout)
         self.res_attention = res_attention
         head_dim = d_model // n_heads
@@ -660,6 +754,16 @@ class _ScaledDotProductAttention(CausalLocalMasks):
         self.attn_mask_score_record = np.zeros(len(self.attn_score_bins) - 1)
         self.attn_score_dt = []
 
+        if self.attn_window is not None:
+            self._map_linear_Q_K = torch.vmap(self._linear_Q_K, (0, 2, None), out_dims=2)
+            self._map_linear_W_V = torch.vmap(self._linear_W_V, (0, 2, None), out_dims=2)
+            self._map_idxs = torch.zeros((patch_num, self.attn_window), dtype=int)
+
+    def _linear_Q_K(self, idx, Q, K):
+        return torch.matmul(Q, K[:,:,:,idx])
+
+    def _linear_W_V(self, idx, W, V):
+        return torch.matmul(W, V[:,:,idx])
     
     def forward(
         self,
@@ -685,10 +789,15 @@ class _ScaledDotProductAttention(CausalLocalMasks):
         """
 
         # Scaled MatMul (q, k) - similarity scores for all pairs of positions in an input sequence
-        attn_scores = (
-            torch.matmul(q, k) * self.scale
-        )  # attn_scores : [bs x n_heads x max_q_len x q_len]
-
+        if self.attn_window is None:
+            attn_scores = (
+                torch.matmul(q, k) * self.scale
+            )  # attn_scores : [bs x n_heads x max_q_len x q_len]
+        else:
+            q = q.unsqueeze(3)
+            attn_scores = self._map_linear_Q_K(self._map_idxs, q, k)
+            
+        #print("ATTN SCORE", attn_scores.shape)
         if self.record_scores:
             self.raw_scores = attn_scores
 
@@ -711,6 +820,7 @@ class _ScaledDotProductAttention(CausalLocalMasks):
             )  # attn_weights   : [bs x n_heads x max_q_len x q_len]
 
         decay_mask = self.get_decay_mask().to(attn_scores.device)
+        #print("DECAY SIZE", decay_mask.shape)
         attn_scores = attn_scores + decay_mask
         if self.record_scores:
             self.masked_scores = attn_scores
@@ -734,9 +844,17 @@ class _ScaledDotProductAttention(CausalLocalMasks):
             attn_weights = self.attn_dropout(attn_weights)
 
         # compute the new values given the attention weights
-        output = torch.matmul(
-            attn_weights, v
-        )  # output: [bs x n_heads x max_q_len x d_v]
+        #print("AVG SHAPES", attn_weights.shape, v.shape)
+        if self.attn_window is None:
+            output = torch.matmul(
+                attn_weights, v
+            )  # output: [bs x n_heads x max_q_len x d_v]
+        else:
+            output = self._map_linear_W_V(self._map_idxs, attn_weights, v).squeeze(3)
+        # Remove linear attn extra dim
+        #if self.attn_window is not None:
+        #    output = output[:,:,:,0,:]
+        #print("OUTPUT", output.shape)
 
         if self.res_attention:
             return output, attn_weights, attn_scores

@@ -15,6 +15,7 @@ class CausalLocalMasks(nn.Module):
         attn_decay_scale=0,
         patch_num=1,
         train_attn_decay=False,
+        attn_window=None,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -24,11 +25,16 @@ class CausalLocalMasks(nn.Module):
 
         self.get_decay_mask = None
         self.decay_mask = 0
-        self.times = nn.Parameter(
-            torch.arange(patch_num, dtype=torch.float32).unsqueeze(1)
-            - torch.arange(patch_num, dtype=torch.float32).unsqueeze(0),
-            requires_grad=False,
-        )
+        if attn_window is None:
+            self.times = nn.Parameter(
+                torch.arange(patch_num, dtype=torch.float32).unsqueeze(1)
+                - torch.arange(patch_num, dtype=torch.float32).unsqueeze(0),
+                requires_grad=False,
+            )
+        else:
+            self.times = attn_window - 1 - torch.arange(
+                attn_window, dtype=torch.float32, requires_grad=False
+            )
 
         if self.mask_type is None or self.mask_type.lower() == "none":
             self.decay_mask = torch.zeros((1))

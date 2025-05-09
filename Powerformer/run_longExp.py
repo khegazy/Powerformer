@@ -30,6 +30,9 @@ if __name__ == "__main__":
         help="model name, options: [Autoformer, Informer, Transformer]",
     )
     parser.add_argument(
+        "--attn_window", type=int, required=False, default=None, help="Uses linear attention with window size"
+    )
+    parser.add_argument(
         "--save_attn", action="store_true", help="Save attention distribution"
     )
     parser.add_argument(
@@ -254,7 +257,7 @@ if __name__ == "__main__":
     if args.is_training:
         for ii in range(args.itr, args.itr + 1):
             # setting record of experiments
-            setting = "{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_dt{}_at{}_{}_{}".format(
+            setting = "test_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_dt{}_at{}_{}_{}".format(
                 args.model_id,
                 args.model,
                 args.data,
@@ -306,7 +309,7 @@ if __name__ == "__main__":
 
             torch.cuda.empty_cache()
     else:
-        chkpt_setting = "{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_dt{}_at{}_{}_{}".format(
+        chkpt_setting = "test_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_dt{}_at{}_{}_{}".format(
             args.model_id,
             args.model,
             args.data,
@@ -327,7 +330,7 @@ if __name__ == "__main__":
             args.itr,
         )
 
-        save_setting = "{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_dt{}_at{}_{}_{}".format(
+        save_setting = "test_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_dt{}_at{}_{}_{}".format(
             args.model_id,
             args.model,
             args.data,

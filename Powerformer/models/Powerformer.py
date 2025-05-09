@@ -45,6 +45,7 @@ class Model(nn.Module):
         c_in = configs.enc_in
         context_window = configs.seq_len
         target_window = configs.pred_len
+        attn_window=configs.attn_window
 
         n_layers = configs.e_layers
         n_heads = configs.n_heads
@@ -89,6 +90,7 @@ class Model(nn.Module):
                 d_v=d_v,
                 d_ff=d_ff,
                 norm=norm,
+                attn_window=attn_window,
                 attn_dropout=attn_dropout,
                 dropout=dropout,
                 act=act,
@@ -130,6 +132,7 @@ class Model(nn.Module):
                 d_v=d_v,
                 d_ff=d_ff,
                 norm=norm,
+                attn_window=attn_window,
                 attn_dropout=attn_dropout,
                 dropout=dropout,
                 act=act,
@@ -172,6 +175,7 @@ class Model(nn.Module):
                 d_v=d_v,
                 d_ff=d_ff,
                 norm=norm,
+                attn_window=attn_window,
                 attn_dropout=attn_dropout,
                 dropout=dropout,
                 act=act,
