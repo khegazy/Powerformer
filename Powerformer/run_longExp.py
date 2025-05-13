@@ -1,5 +1,6 @@
-import argparse
 import sys
+print("SYS", sys.executable)
+import argparse
 import os
 import random
 import numpy as np
@@ -21,6 +22,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--model_id", type=str, required=True, default="test", help="model id"
+    )
+    parser.add_argument(
+        "--model_id_prefix", type=str, required=True, default="", help="model id"
     )
     parser.add_argument(
         "--model",
@@ -176,6 +180,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--learning_rate", type=float, default=0.0001, help="optimizer learning rate"
     )
+    parser.add_argument(
+        "--weight_decay", type=float, default=0.014, help="optimizer weight decay"
+    )
     parser.add_argument("--des", type=str, default="test", help="exp description")
     parser.add_argument("--loss", type=str, default="mse", help="loss function")
     parser.add_argument(
@@ -206,6 +213,9 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    args.model_id = args.model_id_prefix + args.model_id
+    #args.checkpoints = args.checkpoints + "lr" + str(args.learning_rate)
+
     if args.use_gpu and args.use_multi_gpu:
         os.environ["CUDA_VISIBLE_DEVICES"] = (
             str(args.gpu) if not args.use_multi_gpu else args.devices
@@ -363,5 +373,6 @@ if __name__ == "__main__":
             save_setting=save_setting,
             save_attn=args.save_attn,
             save_attn_matrices=args.save_attn_matrices,
+            checkpoint_dir=args.checkpoints,
         )
         torch.cuda.empty_cache()

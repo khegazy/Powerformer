@@ -59,7 +59,23 @@ class Exp_Main(Exp_Basic):
 
 
     def _select_optimizer(self):
-        model_optim = optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
+        # First, separate ViT parameters from the rest:
+        backbone_params = []
+        other_params = []
+
+        for name, param in self.model.named_parameters():
+            print(name, param.shape)
+            if not param.requires_grad:
+                continue  # skip frozen params
+            if "backbone" in name:
+                backbone_params.append(param)
+            else:
+                other_params.append(param)
+        model_optim = optim.Adam([
+            {'params': backbone_params, 'weight_decay': self.args.weight_decay},
+            {'params': other_params, 'weight_decay': 0.0},
+        ], lr=self.args.learning_rate)
+        #model_optim = optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
         return model_optim
 
 
@@ -306,6 +322,8 @@ class Exp_Main(Exp_Basic):
         save_attn_matrices=0,
         output_dir="./",
         save_setting=None,
+        checkpoint_dir="./checkpoints",
+        result_suffix=""
     ):
         test_data, test_loader = self._get_data(flag="test")
         if save_setting == None:
@@ -313,10 +331,11 @@ class Exp_Main(Exp_Basic):
 
         if test:
             self.model.load_state_dict(
-                torch.load(os.path.join("./checkpoints/" + setting, "checkpoint.pth"))
+                torch.load(os.path.join(checkpoint_dir, setting, "checkpoint.pth"))
             )
 
-        folder_path = os.path.join(output_dir, "results", save_setting)
+        folder_path = os.path.join(output_dir, "results"+result_suffix, save_setting)
+        print("FOLDER PATH", folder_path)
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
         if os.path.exists(os.path.join(folder_path, "score_bins.npy")):
@@ -437,9 +456,10 @@ class Exp_Main(Exp_Basic):
 
         # result save
         mae, mse, rmse, mape, mspe, rse, corr = metric(preds, trues)
+        print("RESULT FN!!!", "result" + result_suffix + ".txt")
         if not save_attn:
             print("mse:{}, mae:{}, rse:{}".format(mse, mae, rse))
-            f = open("result.txt", "a")
+            f = open("result" + result_suffix + ".txt", "a")
             f.write(save_setting + "  \n")
             f.write("mse:{}, mae:{}, rse:{}".format(mse, mae, rse))
             f.write("\n")
@@ -449,7 +469,7 @@ class Exp_Main(Exp_Basic):
         pred_mse = (np.sum(preds - trues, axis=1)) ** 2
         pred_mae = np.abs(np.sum(preds - trues, axis=1))
         np.save(
-            os.path.join(folder_path + "metrics.npy"),
+            os.path.join(folder_path, "metrics.npy"),
             np.concatenate([np.array([mae, mse, rmse, mape, mspe, rse]), corr])
         )
         np.save(os.path.join(folder_path, "pred.npy"), preds)
@@ -463,7 +483,7 @@ class Exp_Main(Exp_Basic):
         idx4 = setting.find("_", idx3 + 2)
         data_filename = os.path.join(
             output_dir,
-            "results",
+            "results" + result_suffix,
             f"data_{setting[:idx0]}{setting[idx1:idx2]}{setting[idx3:idx4]}.npy"
         )
         np.save(data_filename, trues)
@@ -590,6 +610,7 @@ class Exp_Main(Exp_Basic):
             self.model.decoder.layers,
             self.model.decoder.layers,
         ]
+        #delta_t = np.expand_dims(np.arange(), -1) - np.expand_dims(np.arange(), 0) 
         for idx, layers in enumerate(attn_layers):
             raw_scores.append([])
             powerlaw_scores.append([])
@@ -606,6 +627,7 @@ class Exp_Main(Exp_Basic):
                     "Raw weights",
                     attn.inner_attention.raw_weights.detach().cpu().numpy().shape,
                 )
+                sdfasd
                 raw_scores[-1].append(
                     np.histogram(
                         attn.inner_attention.raw_scores.detach()
