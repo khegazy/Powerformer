@@ -333,17 +333,21 @@ class Exp_Main(Exp_Basic):
             self._save_attn_matrices(save_attn_matrices, test_data, folder_path)
         if save_attn:
             score_bins = np.linspace(-500, 500, 2001)
-            weight_bins = np.linspace(0, 1, 101)
+            weight_bins = np.linspace(0, 1, 1001)
             attn_raw_scores = [[]]
             attn_powerlaw_scores = [[]]
             attn_raw_weights = [[]]
+            attn_raw_weights_2d = [[]]
             attn_powerlaw_weights = [[]]
+            attn_powerlaw_weights_2d = [[]]
             if self.args.model.lower() == "transformer":
                 for i in range(2):
                     attn_raw_scores.append([])
                     attn_powerlaw_scores.append([])
                     attn_raw_weights.append([])
+                    attn_raw_weights_2d.append([])
                     attn_powerlaw_weights.append([])
+                    attn_powerlaw_weights_2d.append([])
 
         with torch.no_grad():
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(
@@ -404,7 +408,7 @@ class Exp_Main(Exp_Basic):
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
                 if save_attn:
-                    raw_scores, powerlaw_scores, raw_weights, powerlaw_weights = (
+                    raw_scores, powerlaw_scores, raw_weights, raw_weights_2d, powerlaw_weights, powerlaw_weights_2d = (
                         self._record_attn_distributions(score_bins, weight_bins)
                     )
 
@@ -415,14 +419,13 @@ class Exp_Main(Exp_Basic):
                 trues.append(true)
                 inputx.append(batch_x.detach().cpu().numpy())
                 if save_attn:
-                    print(
-                        "combine raw", len(raw_scores), np.array(raw_weights[0]).shape
-                    )
                     for i in range(len(raw_scores)):
                         attn_raw_scores[i].append(np.array(raw_scores[i]))
                         attn_powerlaw_scores[i].append(np.array(powerlaw_scores[i]))
                         attn_raw_weights[i].append(np.array(raw_weights[i]))
+                        attn_raw_weights_2d[i].append(np.array(raw_weights_2d[i]))
                         attn_powerlaw_weights[i].append(np.array(powerlaw_weights[i]))
+                        attn_powerlaw_weights_2d[i].append(np.array(powerlaw_weights_2d[i]))
 
         if self.args.test_flop:
             test_params_flop((batch_x.shape[1], batch_x.shape[2]))
@@ -472,7 +475,9 @@ class Exp_Main(Exp_Basic):
                 attn_raw_scores,
                 attn_powerlaw_scores,
                 attn_raw_weights,
+                attn_raw_weights_2d,
                 attn_powerlaw_weights,
+                attn_powerlaw_weights_2d,
                 score_bins,
                 weight_bins,
                 folder_path,
@@ -584,7 +589,9 @@ class Exp_Main(Exp_Basic):
         raw_scores = []
         powerlaw_scores = []
         raw_weights = []
+        raw_weights_2d = []
         powerlaw_weights = []
+        powerlaw_weights_2d = []
         attn_layers = [
             self.model.encoder.attn_layers,
             self.model.decoder.layers,
@@ -594,7 +601,9 @@ class Exp_Main(Exp_Basic):
             raw_scores.append([])
             powerlaw_scores.append([])
             raw_weights.append([])
+            raw_weights_2d.append([])
             powerlaw_weights.append([])
+            powerlaw_weights_2d.append([])
             for layer in layers:
                 if idx == 0:
                     attn = layer.attention
@@ -624,6 +633,10 @@ class Exp_Main(Exp_Basic):
                         score_bins,
                     )[0]
                 )
+                B,N, N_times, _ = attn.inner_attention.raw_weights.shape
+                times = np.expand_dims(np.arange(N_times), 1) - np.expand_dims(np.arange(N_times), 0)
+                times = np.concatenate([times,]*B*N).flatten()
+                time_bins = np.linspace(-1*N_times, N_times, 2*N_times + 1)
                 raw_weights[-1].append(
                     np.histogram(
                         attn.inner_attention.raw_weights.detach()
@@ -631,6 +644,16 @@ class Exp_Main(Exp_Basic):
                         .numpy()
                         .flatten(),
                         weight_bins,
+                    )[0]
+                )
+                raw_weights_2d[-1].append(
+                    np.histogram2d(
+                        times,
+                        attn.inner_attention.raw_weights.detach()
+                        .cpu()
+                        .numpy()
+                        .flatten(),
+                        [time_bins, weight_bins] 
                     )[0]
                 )
                 powerlaw_weights[-1].append(
@@ -642,7 +665,17 @@ class Exp_Main(Exp_Basic):
                         weight_bins,
                     )[0]
                 )
-        return raw_scores, powerlaw_scores, raw_weights, powerlaw_weights
+                powerlaw_weights_2d[-1].append(
+                    np.histogram2d(
+                        times,
+                        attn.inner_attention.attn_weights.detach() 
+                        .cpu()
+                        .numpy()
+                        .flatten(),
+                        [time_bins, weight_bins] 
+                    )[0]
+                )
+        return raw_scores, powerlaw_scores, raw_weights, raw_weights_2d, powerlaw_weights, powerlaw_weights_2d
 
     def _gather_powerformer_attn(self, score_bins, weight_bins):
         raw_scores = [
@@ -666,11 +699,27 @@ class Exp_Main(Exp_Basic):
                 for enc in self.model.model.backbone.encoder.layers
             ]
         ]
+        B, N, N_times, _ = self.model.model.backbone.encoder.layers[0].self_attn.sdp_attn.masked_scores.shape
+        times = np.expand_dims(np.arange(N_times), 1) - np.expand_dims(np.arange(N_times), 0)
+        times = np.array([times,]*B*N).flatten()
+        time_bins = np.linspace(-1*N_times, N_times, 2*N_times + 1)
+        #print("shapes", self.model.model.backbone.encoder.layers[0].self_attn.sdp_attn.masked_scores.shape, times.shape, time_bins.shape, weight_bins.shape)
+
         raw_weights = [
             [
                 np.histogram(
                     enc.self_attn.sdp_attn.raw_weights.detach().cpu().numpy().flatten(),
                     weight_bins,
+                )[0]
+                for enc in self.model.model.backbone.encoder.layers
+            ]
+        ]
+        raw_weights_2d = [
+            [
+                np.histogram2d(
+                    times,
+                    enc.self_attn.sdp_attn.raw_weights.detach().cpu().numpy().flatten(),
+                    [time_bins, weight_bins],
                 )[0]
                 for enc in self.model.model.backbone.encoder.layers
             ]
@@ -687,7 +736,21 @@ class Exp_Main(Exp_Basic):
                 for enc in self.model.model.backbone.encoder.layers
             ]
         ]
-        return raw_scores, powerlaw_scores, raw_weights, powerlaw_weights
+        powerlaw_weights_2d = [
+            [
+                np.histogram2d(
+                    times,
+                    enc.self_attn.sdp_attn.attn_weights.detach()
+                    .cpu()
+                    .numpy()
+                    .flatten(),
+                    [time_bins, weight_bins]
+                )[0]
+                for enc in self.model.model.backbone.encoder.layers
+            ]
+        ]
+
+        return raw_scores, powerlaw_scores, raw_weights, raw_weights_2d, powerlaw_weights, powerlaw_weights_2d 
 
     def _record_attn_distributions(self, score_bins, weight_bins):
         if self.args.model.lower() == "transformer":
@@ -700,7 +763,9 @@ class Exp_Main(Exp_Basic):
         attn_raw_scores,
         attn_powerlaw_scores,
         attn_raw_weights,
+        attn_raw_weights_2d,
         attn_powerlaw_weights,
+        attn_powerlaw_weights_2d,
         score_bins,
         weight_bins,
         folder_path,
@@ -710,17 +775,14 @@ class Exp_Main(Exp_Basic):
         np.save(os.path.join(folder_path, "weight_bins.npy"), weight_bins)
         for idx in range(len(attn_raw_scores)):
             label = labels[idx]
-            print("LABEL", label)
+            print("LABEL", label, len(attn_raw_weights[idx]), attn_raw_weights[idx][0].shape, len(attn_raw_weights_2d[idx]), attn_raw_weights_2d[idx][0].shape)
             comb_attn_raw_scores = np.sum(np.array(attn_raw_scores[idx]), 0)
             comb_attn_powerlaw_scores = np.sum(np.array(attn_powerlaw_scores[idx]), 0)
             comb_attn_raw_weights = np.sum(np.array(attn_raw_weights[idx]), 0)
+            comb_attn_raw_weights_2d = np.sum(np.array(attn_raw_weights_2d[idx]), 0)
             comb_attn_powerlaw_weights = np.sum(np.array(attn_powerlaw_weights[idx]), 0)
-            print(
-                "SIZES",
-                np.array(attn_raw_scores[idx]).shape,
-                len(attn_raw_scores),
-                comb_attn_raw_scores.shape,
-            )
+            comb_attn_powerlaw_weights_2d = np.sum(np.array(attn_powerlaw_weights_2d[idx]), 0)
+
             np.save(
                 os.path.join(folder_path, label + "attn_raw_scores.npy"),
                 comb_attn_raw_scores,
@@ -734,8 +796,16 @@ class Exp_Main(Exp_Basic):
                 comb_attn_raw_weights,
             )
             np.save(
+                os.path.join(folder_path, label + "attn_raw_weights_2d.npy"),
+                comb_attn_raw_weights_2d,
+            )
+            np.save(
                 os.path.join(folder_path, label + "attn_powerlaw_weights.npy"),
                 comb_attn_powerlaw_weights,
+            )
+            np.save(
+                os.path.join(folder_path, label + "attn_powerlaw_weights_2d.npy"),
+                comb_attn_powerlaw_weights_2d,
             )
 
             if self.args.model.lower() == "transformer":
