@@ -24,10 +24,10 @@ shift = 0.435
 vmin, vmax = 1, 5e7
 for i, (idx, ltr) in enumerate(zip([0, 2], [('a', 'c'), ('b', 'd')])):
     ax0s.append(fig.add_axes(
-        (lbuf+i*(width+0.005), 0.12, width, 0.855) 
+        (lbuf+i*(width+0.005), 0.135, width, 0.84) 
     ))
     ax1s.append(fig.add_axes(
-        (lbuf+2*width+0.017+i*(0.005+0.5*width), 0.12, width/2, 0.855) 
+        (lbuf+2*width+0.017+i*(0.005+0.5*width), 0.135, width/2, 0.84) 
     ))
     print(np.amax(data0[idx]))
     im = ax0s[-1].pcolormesh(
@@ -44,28 +44,29 @@ for i, (idx, ltr) in enumerate(zip([0, 2], [('a', 'c'), ('b', 'd')])):
     ax1s[-1].text(0.7, 0.85, "With Mask", fontsize=17, ha='center', transform=ax1s[-1].transAxes)
     ax0s[-1].text(0.8, 0.93, f"Layer {idx+1}", fontsize=17, ha='center', transform=ax0s[-1].transAxes)
     ax1s[-1].text(0.7, 0.93, f"Layer {idx+1}", fontsize=17, ha='center', transform=ax1s[-1].transAxes)
+cax = fig.add_axes((lbuf+0.01+width*3/2+shift, 0.135, 0.03, 0.84))
 
 for i, ax in enumerate(ax0s + ax1s):
     ax.set_yscale('log')
-    ax.set_xscale('log')
     ax.set_ylim(0.001, 1.0)
     if i < 2:
         ax.set_xlim(-1*N_time+1, N_time)
+        ax.set_xscale('symlog')
     else:
-        ax.set_xlim(1e-1, 60)
+        ax.set_xscale('symlog')
+        #ax.set_xlim(1e-1, 60)
     if i > 0:
         ax.yaxis.set_visible(False)
     ax.set_xlabel("Time Delay", fontsize=lsize)
     ax.tick_params(axis='both', labelsize=tsize)
     ax.grid(False)
 ax0s[0].set_ylabel("Attention Weight", fontsize=lsize)
-cax = fig.add_subplot((lbuf+0.01+width*3/2+shift, 0.12, 0.03, 0.855))
 fig.colorbar(im, cax)
 cax.tick_params(axis='both', labelsize=tsize)
 fig.savefig("./plots/weight_distributions.png")
-fig.savefig("./plots/weight_distributions.eps")
-fig.savefig("./plots/weight_distributions.svg")
-fig.savefig("./plots/weight_distributions.pdf", dpi=500)
+#fig.savefig("./plots/weight_distributions.eps")
+#fig.savefig("./plots/weight_distributions.svg")
+#fig.savefig("./plots/weight_distributions.pdf", dpi=500)
 
 """
 for i, data in enumerate([data0, data1]):
