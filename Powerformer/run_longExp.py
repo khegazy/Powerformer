@@ -24,7 +24,7 @@ if __name__ == "__main__":
         "--model_id", type=str, required=True, default="test", help="model id"
     )
     parser.add_argument(
-        "--model_id_prefix", type=str, required=True, default="", help="model id"
+        "--model_id_prefix", type=str, required=False, default="", help="model id"
     )
     parser.add_argument(
         "--model",
